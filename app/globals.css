@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  color: #202522;
+  background: #f4f5f2;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+button, textarea, input { font: inherit; }
+
+::selection { color: #f7faf7; background: #257565; }
+
+@keyframes pulse-bar { 50% { opacity: 0.35; transform: scaleY(0.45); } }
+.loading-bar { animation: pulse-bar 0.9s ease-in-out infinite; transform-origin: bottom; }
