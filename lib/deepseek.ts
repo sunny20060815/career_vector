@@ -1,20 +1,61 @@
 import { env } from "@/lib/env";
-import { validateParsedCareerQuery } from "@/lib/query";
-import type { ParsedCareerQuery } from "@/types/career";
 
 interface DeepSeekResponse {
   choices?: Array<{ message?: { content?: string | null } }>;
 }
 
-async function complete(model: string, messages: Array<{ role: "system" | "user"; content: string }>): Promise<string> {
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.deepseekApiKey()}`
-    },
-    body: JSON.stringify({ model, messages, temperature: 0.2, stream: false })
-  });
+const ANSWER_TIMEOUT_MS = 16_000;
+type DeepSeekMessage = { role: "system" | "user"; content: string };
+
+export function buildDeepSeekPayload(model: string, messages: DeepSeekMessage[]) {
+  return {
+    model,
+    messages,
+    temperature: 0.35,
+    max_tokens: 700,
+    stream: false,
+    thinking: { type: "disabled" as const }
+  };
+}
+
+export function limitCareerAnswer(answer: string, maxLength = 520): string {
+  const trimmed = answer.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  const candidate = trimmed.slice(0, maxLength);
+  const lastSentenceEnd = Math.max(...["。", "！", "？", "!", "?"].map((mark) => candidate.lastIndexOf(mark)));
+  return lastSentenceEnd >= Math.floor(maxLength * 0.55)
+    ? candidate.slice(0, lastSentenceEnd + 1)
+    : `${candidate.slice(0, maxLength - 1)}…`;
+}
+
+export const CAREER_ADVISOR_SYSTEM_PROMPT = `你是“职向量”的首席职业顾问。你的任务不是复述数据，而是帮助用户做下一步职业决策。
+
+【事实边界】你只能使用“检索证据”中的事实。不能补造行业、公司、城市、薪资、概率、增长率或因果关系；不能把相关性说成因果。预测必须明确是预测年份。若 observedPairCount 为 0，必须说明没有直接观测到该技能组合，不能推断组合工资互补效应。
+
+【决策方法】先理解用户真正要解决的选择：职业方向、城市选择、技能补强或趋势判断。然后按“结论优先、理由随后、行动可执行”的顺序回答。职业推荐只提最相关的 1-3 个；城市只提最值得优先考虑的 1-3 个；下一技能只提最有用的 1-2 个。优先使用用户输入的目标城市、期望薪资、经验和预测年份，但这些偏好只是证据解释的一部分，不能假装成硬性录用条件。
+
+【表达要求】用自然、克制的简体中文直接回答用户的问题。开头用一两句话给明确建议，不要先解释系统、字段、算法、表名或 JSON。随后用 2-4 个短段落说明“为什么这样建议”“城市或趋势意味着什么”“下一步怎么做”。除非数字直接影响决策，否则不要罗列数字；需要数字时，最多给 2-3 个关键数字，并说明其含义。避免“根据数据可见”“NPMI”“排名分数”“AI 暴露度”等技术术语堆砌；AI 相关内容只在影响岗位选择或学习方向时解释。
+
+【长度与格式】总长度控制在 260-520 个汉字之间，最多 5 段。不要使用标题、项目符号、Markdown 表格、免责声明套话或原始数据引用。结尾必须给出一个具体、低成本、可执行的下一步。`;
+
+async function complete(model: string, messages: DeepSeekMessage[], timeoutMs = ANSWER_TIMEOUT_MS): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.deepseekApiKey()}`
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify(buildDeepSeekPayload(model, messages))
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error("DeepSeek 响应超时");
+    }
+    throw new Error("DeepSeek 网络请求失败");
+  }
   if (!response.ok) {
     throw new Error(`DeepSeek 请求失败（${response.status}）`);
   }
@@ -26,30 +67,13 @@ async function complete(model: string, messages: Array<{ role: "system" | "user"
   return content;
 }
 
-export async function parseCareerQuestion(question: string, history: string[]): Promise<ParsedCareerQuery> {
-  const content = await complete(env.deepseekParseModel(), [
-    {
-      role: "system",
-      content: "你是职业数据检索解析器。只输出 JSON，不回答问题。字段必须为 skills、occupationKeywords、cities、salaryMinYuan、salaryMaxYuan、experienceYears、education、forecastYear、intent。education 仅可为 secondary/associate/bachelor/master/doctor/null，forecastYear 仅可为 2026/2027/2028/null，intent 仅可为 career_recommendation/skill_trend/city_recommendation/job_comparison/skill_growth。未知字段填空数组或 null。"
-    },
-    {
-      role: "user",
-      content: `近期用户偏好：${history.join("；") || "无"}\n当前问题：${question}`
-    }
-  ]);
-  try {
-    return validateParsedCareerQuery(JSON.parse(content) as unknown);
-  } catch {
-    throw new Error("问题解析失败，请换一种更具体的描述");
-  }
-}
-
 export async function writeCareerAnswer(question: string, evidence: object): Promise<string> {
-  return complete(env.deepseekAnswerModel(), [
+  const answer = await complete(env.deepseekAnswerModel(), [
     {
       role: "system",
-      content: "你是职业数据解读助手。只能根据提供的 JSON 事实回答，不得补充未出现的数值或因果关系。对预测必须标明年份；没有直接组合证据时必须说明不能推断组合互补效应。用简体中文，分段清晰。"
+      content: CAREER_ADVISOR_SYSTEM_PROMPT
     },
     { role: "user", content: `原问题：${question}\n检索证据：${JSON.stringify(evidence)}` }
   ]);
+  return limitCareerAnswer(answer);
 }

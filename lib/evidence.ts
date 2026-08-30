@@ -1,9 +1,12 @@
 import { normaliseSkillToken } from "@/lib/query";
+import { parseCareerQuestionLocally, type LocalSkillCatalogEntry } from "@/lib/local-query";
 import { rankOccupations, selectObservedPairs, type OccupationSkillStat, type PairOccupationStat, type SkillPair } from "@/lib/ranking";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ParsedCareerQuery } from "@/types/career";
 
 type Row = Record<string, unknown>;
+
+let skillCatalogPromise: Promise<LocalSkillCatalogEntry[]> | undefined;
 
 export interface CareerEvidence {
   forecastYear: number;
@@ -45,6 +48,37 @@ function profileView(row: Row, year: number): Record<string, unknown> {
   };
 }
 
+export async function parseCareerQuestionFromCatalog(question: string): Promise<ParsedCareerQuery> {
+  if (!skillCatalogPromise) {
+    skillCatalogPromise = (async () => {
+      const admin = createAdminClient();
+      const [{ data: skills, error: skillsError }, { data: aliases, error: aliasesError }] = await Promise.all([
+        admin.from("skills").select("canonical_name"),
+        admin.from("skill_aliases").select("canonical_name,alias")
+      ]);
+      if (skillsError || aliasesError) throw new Error("无法加载技能识别词典");
+      const aliasesBySkill = new Map<string, string[]>();
+      for (const row of (aliases ?? []) as Row[]) {
+        const canonicalName = text(row, "canonical_name");
+        const alias = text(row, "alias");
+        if (canonicalName && alias) {
+          const current = aliasesBySkill.get(canonicalName) ?? [];
+          current.push(alias);
+          aliasesBySkill.set(canonicalName, current);
+        }
+      }
+      return ((skills ?? []) as Row[]).map((row) => {
+        const canonicalName = text(row, "canonical_name");
+        return { canonicalName, aliases: aliasesBySkill.get(canonicalName) ?? [] };
+      }).filter((entry) => Boolean(entry.canonicalName));
+    })().catch((error: unknown) => {
+      skillCatalogPromise = undefined;
+      throw error;
+    });
+  }
+  return parseCareerQuestionLocally(question, await skillCatalogPromise);
+}
+
 export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<CareerEvidence> {
   const admin = createAdminClient();
   const tokens = query.skills.map(normaliseSkillToken).filter(Boolean);
@@ -64,19 +98,21 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<
     return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, preferenceNotes: ["暂无可识别的技能记录"] };
   }
 
-  const [{ data: profiles, error: profileError }, { data: pairs, error: pairError }, { data: occupationRows, error: occupationError }, { data: cityRows, error: cityError }] = await Promise.all([
-    admin.from("skills").select("*").in("canonical_name", recognizedSkills),
-    admin.from("skill_pairs").select("*").limit(10000),
-    admin.from("occupation_skill_stats").select("*").in("canonical_name", recognizedSkills),
-    admin.from("city_skill_forecasts").select("*").in("canonical_name", recognizedSkills).eq("forecast_year", query.forecastYear)
+  const [{ data: profiles, error: profileError }, { data: occupationRows, error: occupationError }, { data: cityRows, error: cityError }, { data: pairsFromSkillA, error: pairFromSkillAError }, { data: pairsFromSkillB, error: pairFromSkillBError }] = await Promise.all([
+    admin.from("skills").select("canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,ai_exposure,ai_group,ai_cooccurrence_npmi,forecast_2026,forecast_2027,forecast_2028,fact_summary").in("canonical_name", recognizedSkills),
+    admin.from("occupation_skill_stats").select("canonical_name,occupation_code,occupation_name,probability,concentration,forecast_demand_2026,forecast_demand_2027,forecast_demand_2028").in("canonical_name", recognizedSkills),
+    admin.from("city_skill_forecasts").select("canonical_name,city,demand_per_10k,demand_volume_index").in("canonical_name", recognizedSkills).eq("forecast_year", query.forecastYear),
+    admin.from("skill_pairs").select("id,skill_a,skill_b,npmi").in("skill_a", recognizedSkills),
+    admin.from("skill_pairs").select("id,skill_a,skill_b,npmi").in("skill_b", recognizedSkills)
   ]);
-  if (profileError || pairError || occupationError || cityError) {
+  if (profileError || occupationError || cityError || pairFromSkillAError || pairFromSkillBError) {
     throw new Error("职业证据查询失败");
   }
+  const pairs = Array.from(new Map([...(pairsFromSkillA ?? []), ...(pairsFromSkillB ?? [])].map((row) => [text(row as Row, "id"), row as Row])).values());
   const mappedPairs: SkillPair[] = ((pairs ?? []) as Row[]).map((row) => ({ id: text(row, "id"), skillA: text(row, "skill_a"), skillB: text(row, "skill_b") }));
   const observedPairIds = selectObservedPairs(recognizedSkills, mappedPairs);
   const { data: pairOccupationRows, error: pairOccupationError } = observedPairIds.length
-    ? await admin.from("pair_occupation_stats").select("*").in("pair_id", observedPairIds)
+    ? await admin.from("pair_occupation_stats").select("pair_id,occupation_code,probability,concentration").in("pair_id", observedPairIds)
     : { data: [], error: null };
   if (pairOccupationError) {
     throw new Error("组合职业证据查询失败");

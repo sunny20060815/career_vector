@@ -4,7 +4,9 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronRight, CircleHelp, Clock3, LoaderCircle, LogOut, MessageSquareText, Plus, Sparkles } from "lucide-react";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import type { ChatResponse } from "@/types/api";
+import { buildEvidencePreview, type EvidencePreview } from "@/lib/career-presentation";
+import { decodeChatStream } from "@/lib/chat-stream";
+import type { ChatEvidenceEvent, ChatProgress, ChatResponse } from "@/types/api";
 
 interface Conversation { id: string; title: string; updated_at: string }
 interface UiMessage { id: string; role: "user" | "assistant"; content: string; evidence?: ChatResponse["evidence"] }
@@ -23,6 +25,8 @@ export function CareerWorkbench() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<ChatProgress | null>(null);
+  const [preview, setPreview] = useState<EvidencePreview | null>(null);
   const [error, setError] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -94,20 +98,50 @@ export function CareerWorkbench() {
     if (!userEmail) return setError("请先登录后再提交职业咨询。");
     const submitted = question.trim();
     setLoading(true);
+    setProgress({ stage: "understanding", message: "正在识别技能与求职偏好..." });
+    setPreview(null);
     setError("");
     setQuestion("");
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", content: submitted }]);
     try {
       const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: submitted, conversationId }) });
-      const payload = (await response.json()) as ChatResponse | { error: string };
-      if (!response.ok || "error" in payload) throw new Error("error" in payload ? payload.error : "咨询失败");
-      setConversationId(payload.conversationId);
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", content: payload.answer, evidence: payload.evidence }]);
-      await loadConversations();
+      if (!response.ok || !response.body) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? "咨询失败");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completed = false;
+      while (!completed) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const decoded = decodeChatStream(buffer);
+        buffer = decoded.remaining;
+        for (const event of decoded.events) {
+          if (event.type === "status") {
+            setProgress(event.payload);
+          } else if (event.type === "evidence") {
+            setPreview((event.payload as unknown as ChatEvidenceEvent).preview);
+          } else if (event.type === "complete") {
+            const payload = event.payload as unknown as ChatResponse;
+            setConversationId(payload.conversationId);
+            setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", content: payload.answer, evidence: payload.evidence }]);
+            await loadConversations();
+            completed = true;
+          } else if (event.type === "error") {
+            throw new Error(event.payload.message);
+          }
+        }
+        if (done) break;
+      }
+      if (!completed) throw new Error("咨询连接意外中断，请重试。");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "咨询失败，请稍后重试。");
     } finally {
       setLoading(false);
+      setProgress(null);
+      setPreview(null);
     }
   }
 
@@ -137,7 +171,7 @@ export function CareerWorkbench() {
             <div className="flex items-center justify-between border-t border-[#eef0ed] px-4 py-3"><span className="flex items-center gap-2 text-xs text-[#7e8780]"><CircleHelp size={14} />仅依据已入库的招聘聚合证据回答</span><button disabled={loading || !question.trim()} className="grid h-10 w-10 place-items-center bg-[#1d5f51] text-white transition hover:bg-[#164a3f] disabled:cursor-not-allowed disabled:bg-[#aab6ae]" type="submit" aria-label="提交咨询">{loading ? <LoaderCircle className="animate-spin" size={18} /> : <ArrowUp size={18} />}</button></div>
           </form>
           {error && <p className="mt-3 max-w-5xl border-l-2 border-[#c96637] bg-[#fff9f6] px-4 py-3 text-sm text-[#873d22]">{error}</p>}
-          <div className="mt-10 max-w-5xl space-y-7">{messages.map((message) => <MessageBlock key={message.id} message={message} />)}{loading && <div className="flex items-center gap-3 text-sm text-[#587067]"><span className="flex h-6 items-end gap-1">{[0, 1, 2].map((index) => <i key={index} className="loading-bar block h-5 w-1 bg-[#257565]" style={{ animationDelay: `${index * 120}ms` }} />)}</span>正在检索职业证据并生成解读...</div>}</div>
+          <div className="mt-10 max-w-5xl space-y-7">{messages.map((message) => <MessageBlock key={message.id} message={message} />)}{loading && <div className="border-l-2 border-[#257565] bg-[#f5faf5] px-4 py-4 text-sm text-[#365449]"><div className="flex items-center gap-3"><span className="flex h-6 items-end gap-1">{[0, 1, 2].map((index) => <i key={index} className="loading-bar block h-5 w-1 bg-[#257565]" style={{ animationDelay: `${index * 120}ms` }} />)}</span>{progress?.message ?? "正在准备职业建议..."}</div>{preview && <ReferencePreview preview={preview} />}</div>}</div>
         </section>
       </div>
     </main>
@@ -150,7 +184,11 @@ function MessageBlock({ message }: { message: UiMessage }) {
 }
 
 function Evidence({ evidence }: { evidence: ChatResponse["evidence"] }) {
-  return <div className="mt-5 grid gap-px border border-[#d9ddd8] bg-[#d9ddd8] sm:grid-cols-3"><div className="bg-[#fafcf9] p-4"><p className="text-xs text-[#778077]">识别技能</p><p className="mt-2 text-sm text-[#24372f]">{evidence.recognizedSkills.join("、") || "暂无"}</p></div><div className="bg-[#fafcf9] p-4"><p className="text-xs text-[#778077]">预测目标年</p><p className="mt-2 text-sm text-[#24372f]">{evidence.forecastYear} 年</p></div><div className="bg-[#fafcf9] p-4"><p className="text-xs text-[#778077]">直接观测组合</p><p className="mt-2 text-sm text-[#24372f]">{evidence.observedPairCount} 组</p></div></div>;
+  return <div className="mt-5"><div className="grid gap-px border border-[#d9ddd8] bg-[#d9ddd8] sm:grid-cols-3"><div className="bg-[#fafcf9] p-4"><p className="text-xs text-[#778077]">识别技能</p><p className="mt-2 text-sm text-[#24372f]">{evidence.recognizedSkills.join("、") || "暂无"}</p></div><div className="bg-[#fafcf9] p-4"><p className="text-xs text-[#778077]">预测目标年</p><p className="mt-2 text-sm text-[#24372f]">{evidence.forecastYear} 年</p></div><div className="bg-[#fafcf9] p-4"><p className="text-xs text-[#778077]">直接观测组合</p><p className="mt-2 text-sm text-[#24372f]">{evidence.observedPairCount} 组</p></div></div><ReferencePreview preview={buildEvidencePreview(evidence)} /></div>;
+}
+
+function ReferencePreview({ preview }: { preview: EvidencePreview }) {
+  return <div className="mt-4 border-t border-[#d7e5da] pt-3 text-xs leading-5 text-[#51695d]"><p className="font-medium text-[#2d5949]">本次已检索到的依据</p><p>技能：{preview.skills.join("、") || "暂无"}</p><p>职业：{preview.occupations.join("、") || "暂无"}</p><p>城市：{preview.cities.join("、") || "暂无"}</p><p className="mt-1 text-[#718277]">引用表：{preview.sources.join("、")}</p></div>;
 }
 
 function AuthForms({ email, otp, otpSent, error, onEmail, onOtp, onSend, onVerify }: { email: string; otp: string; otpSent: boolean; error: string; onEmail: (value: string) => void; onOtp: (value: string) => void; onSend: (event: FormEvent) => Promise<void>; onVerify: (event: FormEvent) => Promise<void> }) {

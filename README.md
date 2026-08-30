@@ -5,7 +5,7 @@
 ## 本地运行
 
 1. 安装 Node.js 22 LTS。
-2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY` 和 `SUPABASE_SERVICE_ROLE_KEY` 只能保存在本地或 Vercel 服务端环境变量中。
+2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY` 和 `SUPABASE_SERVICE_ROLE_KEY` 只能保存在本地或 Vercel 服务端环境变量中。`DEEPSEEK_ANSWER_MODEL` 保持为 `deepseek-v4-flash`，用于低延迟的非思考模式职业建议。
 3. 执行 `npm install`、`npm test`、`npm run dev`，浏览器访问 `http://localhost:3000`。
 
 ## 初始化 Supabase
@@ -19,7 +19,7 @@
 
 1. 将本目录上传到 GitHub 并在 Vercel 导入该仓库。
 2. 在 Vercel Project Settings > Environment Variables 填入 `.env.example` 的全部变量；不要提交 `.env.local`。
-3. 保持 `vercel.json` 的 30 秒问答函数时限。`data/` 已被 `.vercelignore` 排除，生产请求只访问 Supabase。
+3. 保持 `vercel.json` 的 30 秒问答函数时限。问答接口会先流式返回已匹配的技能、职业和城市证据，再进行一次 DeepSeek 生成；模型超过 16 秒时会自动改用本地证据生成建议。`data/` 已被 `.vercelignore` 排除，生产请求只访问 Supabase。
 4. 将 Vercel 域名加入 Supabase Auth 的 Site URL 和 Redirect URLs，再用真实邮箱完成 OTP 登录测试。
 
 ## 数据边界与扩展

@@ -4,6 +4,16 @@ import { fileURLToPath } from "node:url";
 import { parse } from "csv-parse";
 import { createClient } from "@supabase/supabase-js";
 import { config as loadEnv } from "dotenv";
+import {
+  createCanonicalSkillNameLookup,
+  deduplicateByKey,
+  deduplicateSkillAliases,
+  normaliseSkillName,
+  orderSkillPair,
+  resolveCanonicalSkillName,
+  resolveImportSectionFromArgs,
+  type CanonicalSkillName
+} from "../lib/import";
 
 type SourceRow = Record<string, string>;
 type DestinationRow = Record<string, string | number | boolean | null | object>;
@@ -16,15 +26,30 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !serviceRoleKey) throw new Error("请在 .env.local 中配置 NEXT_PUBLIC_SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY");
 const supabase = createClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-function normalize(value: string): string { return value.normalize("NFKC").trim().toLocaleLowerCase("zh-CN").replace(/[\s_\-—－/\\（）()]+/g, ""); }
 function text(row: SourceRow, key: string): string | null { const value = row[key]?.trim(); return value ? value : null; }
 function number(row: SourceRow, key: string): number | null { const value = Number(row[key]); return Number.isFinite(value) ? value : null; }
 function boolean(row: SourceRow, key: string): boolean { return row[key] === "是"; }
+function sourceSkillName(row: SourceRow): string {
+  const value = text(row, "标准技能名称") ?? text(row, "canonical_skill");
+  if (!value) throw new Error("源数据缺少标准技能名称和 canonical_skill");
+  return value;
+}
 
 async function readCsv(file: string): Promise<SourceRow[]> {
   const rows: SourceRow[] = [];
   await new Promise<void>((resolve, reject) => createReadStream(path.join(DATA_DIR, file)).pipe(parse({ columns: true, bom: true, skip_empty_lines: true, relax_column_count: true })).on("data", (row: SourceRow) => rows.push(row)).on("error", reject).on("end", resolve));
   return rows;
+}
+
+async function loadCanonicalSkillNameLookup(): Promise<Map<string, string>> {
+  const rows = await readCsv("skills_full.csv");
+  const canonicalSkills: CanonicalSkillName[] = rows.flatMap((row) => {
+    const canonicalName = text(row, "标准技能名称");
+    if (!canonicalName) return [];
+    const aliases = (text(row, "同义词及原始写法") ?? "").split(/[、，,;；]+/).map((value) => value.trim()).filter(Boolean);
+    return [{ canonicalName, aliases }];
+  });
+  return createCanonicalSkillNameLookup(canonicalSkills);
 }
 
 async function upsert(table: string, rows: DestinationRow[], conflict?: string): Promise<void> {
@@ -49,7 +74,7 @@ function forecast(row: SourceRow, year: number): object {
 async function importSkills() {
   const rows = await readCsv("skills_full.csv");
   await upsert("skills", rows.map((row) => ({
-    canonical_name: text(row, "标准技能名称")!, display_name: text(row, "技能展示名称") ?? text(row, "标准技能名称")!, normalized_name: normalize(text(row, "标准技能名称")!),
+    canonical_name: text(row, "标准技能名称")!, display_name: text(row, "技能展示名称") ?? text(row, "标准技能名称")!, normalized_name: normaliseSkillName(text(row, "标准技能名称")!),
     skill_type: text(row, "技能一级类型"), cluster_name: text(row, "技能簇名称"), is_ai_core: boolean(row, "是否AI核心技能"),
     demand_per_10k_2025: number(row, "2025年每万岗位需求数"), salary_median_2025: number(row, "2025年月薪中位数"), experience_mean_2025: number(row, "2025年最低经验年限均值"),
     bachelor_or_above_share_2025: (number(row, "2025年本科学历占比") ?? 0) + (number(row, "2025年硕士学历占比") ?? 0) + (number(row, "2025年博士学历占比") ?? 0),
@@ -58,30 +83,40 @@ async function importSkills() {
   })), "canonical_name");
 }
 
-async function importAliases() {
+async function importAliases(canonicalSkillNameLookup: ReadonlyMap<string, string>) {
   const rows = await readCsv("skill_aliases.csv");
-  const aliases = rows.flatMap((row) => [text(row, "标准技能名称"), text(row, "技能别名")].filter((value): value is string => Boolean(value)).map((alias) => ({ canonical_name: text(row, "标准技能名称")!, alias, normalized_alias: normalize(alias) })));
+  const aliases = deduplicateSkillAliases(rows.flatMap((row) => [text(row, "标准技能名称"), text(row, "技能别名")].filter((value): value is string => Boolean(value)).map((alias) => ({ canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), alias, normalized_alias: normaliseSkillName(alias) }))));
   await upsert("skill_aliases", aliases, "canonical_name,normalized_alias");
 }
 
-async function importRelations() {
+async function importRelations(canonicalSkillNameLookup: ReadonlyMap<string, string>) {
   const [pairs, occupations, cities, pairOccupations, pairCities] = await Promise.all([readCsv("skill_pairs.csv"), readCsv("occupation_skill_stats.csv"), readCsv("city_skill_forecasts.csv"), readCsv("pair_occupation_stats.csv"), readCsv("pair_city_stats.csv")]);
   await upsert("skill_pairs", pairs.filter((row) => row["组合层级"] === "标准技能组合" && text(row, "标准技能名称_技能一") && text(row, "标准技能名称_技能二")).map((row) => {
-    const [skillA, skillB] = [text(row, "标准技能名称_技能一")!, text(row, "标准技能名称_技能二")!].sort((left, right) => left.localeCompare(right, "zh-CN"));
+    const [skillA, skillB] = orderSkillPair(resolveCanonicalSkillName(text(row, "标准技能名称_技能一")!, canonicalSkillNameLookup), resolveCanonicalSkillName(text(row, "标准技能名称_技能二")!, canonicalSkillNameLookup));
     return { id: text(row, "技能组合编号")!, skill_a: skillA, skill_b: skillB, npmi: number(row, "标准化共现强度_NPMI") ?? number(row, "NPMI_2016_2025"), wage_complement_pct: number(row, "工资互补效应_%") ?? number(row, "strict_complement_pct"), wage_complement_p_value: number(row, "互补效应BH调整p值") ?? number(row, "strict_complement_bh_p"), demand_rate_2025: number(row, "2025组合需求率"), demand_rate_2028: number(row, "2028组合需求率预测"), demand_growth_pct: number(row, "2025_2028需求增长_%"), evidence_level: text(row, "互补证据等级") ?? text(row, "证据等级") };
   }), "id");
-  await upsert("occupation_skill_stats", occupations.map((row) => ({ id: text(row, "职业技能关系主键")!, canonical_name: text(row, "标准技能名称")!, occupation_code: text(row, "职业小类代码")!, occupation_name: text(row, "职业小类名称")!, probability: number(row, "平滑后职业匹配概率") ?? number(row, "掌握技能后进入该职业的概率") ?? 0, concentration: number(row, "职业技能相对集中度") ?? 0, forecast_demand_2026: number(row, "2026年职业内技能需求占比预测"), forecast_demand_2027: number(row, "2027年职业内技能需求占比预测"), forecast_demand_2028: number(row, "2028年职业内技能需求占比预测") })), "id");
-  await upsert("city_skill_forecasts", cities.map((row) => ({ id: text(row, "城市技能关系主键")!, canonical_name: text(row, "标准技能名称")!, city: text(row, "城市")!, forecast_year: number(row, "预测年份")!, demand_ratio: number(row, "城市内技能需求占比预测"), demand_per_10k: number(row, "每万岗位需求数预测"), demand_volume_index: null })), "id");
+  await upsert("occupation_skill_stats", occupations.map((row) => ({ id: text(row, "职业技能关系主键")!, canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), occupation_code: text(row, "职业小类代码")!, occupation_name: text(row, "职业小类名称")!, probability: number(row, "平滑后职业匹配概率") ?? number(row, "掌握技能后进入该职业的概率") ?? 0, concentration: number(row, "职业技能相对集中度") ?? 0, forecast_demand_2026: number(row, "2026年职业内技能需求占比预测"), forecast_demand_2027: number(row, "2027年职业内技能需求占比预测"), forecast_demand_2028: number(row, "2028年职业内技能需求占比预测") })), "id");
+  await upsert("city_skill_forecasts", cities.map((row) => ({ id: text(row, "城市技能关系主键")!, canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), city: text(row, "城市")!, forecast_year: number(row, "预测年份")!, demand_ratio: number(row, "城市内技能需求占比预测"), demand_per_10k: number(row, "每万岗位需求数预测"), demand_volume_index: null })), "id");
   await upsert("pair_occupation_stats", pairOccupations.map((row) => ({ id: text(row, "组合职业关系主键")!, pair_id: text(row, "技能组合编号")!, occupation_code: text(row, "职业小类代码")!, occupation_name: text(row, "职业小类名称")!, probability: number(row, "掌握组合后进入该职业概率") ?? 0, concentration: number(row, "职业组合相对集中度") ?? 0 })), "id");
   await upsert("pair_city_stats", pairCities.map((row) => ({ id: text(row, "组合城市关系主键")!, pair_id: text(row, "技能组合编号")!, city: text(row, "城市")!, probability: number(row, "掌握组合后进入该城市概率") ?? 0, concentration: number(row, "城市组合相对集中度") ?? 0 })), "id");
 }
 
-async function importSupplemental() {
+async function importSupplemental(canonicalSkillNameLookup: ReadonlyMap<string, string>) {
   const [yearly, monthly, ai] = await Promise.all([readCsv("skill_yearly_trends.csv"), readCsv("skill_monthly_trends.csv"), readCsv("skill_ai_exposure.csv")]);
-  await upsert("skill_yearly_trends", yearly.map((row) => ({ canonical_name: text(row, "标准技能名称")!, year: number(row, "年份")!, demand_per_10k: number(row, "每万岗位需求数") ?? number(row, "岗位需求每万岗位数预测"), salary_median: number(row, "月薪中位数") ?? number(row, "月薪中位数预测"), experience_mean: number(row, "最低经验年限均值") ?? number(row, "最低经验年限均值预测"), is_forecast: row["数据类型"] === "预测值" })), "canonical_name,year");
-  await upsert("skill_monthly_trends", monthly.map((row) => ({ canonical_name: text(row, "标准技能名称")!, month: text(row, "月份")!, demand_per_10k: number(row, "每万岗位需求数"), salary_median: number(row, "月薪中位数"), experience_mean: number(row, "最低经验年限均值"), is_forecast: row["数据类型"] === "预测值" })), "canonical_name,month");
-  await upsert("skill_ai_exposure", ai.map((row) => ({ canonical_name: text(row, "标准技能名称")!, ai_group: text(row, "AI渗透率职业组")!, demand_share_2025: number(row, "2025年组内技能需求占比"), demand_share_2028: number(row, "2028年组内技能需求占比预测") })), "canonical_name,ai_group");
+  await upsert("skill_yearly_trends", yearly.map((row) => ({ canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), year: number(row, "年份")!, demand_per_10k: number(row, "每万岗位需求数") ?? number(row, "岗位需求每万岗位数预测"), salary_median: number(row, "月薪中位数") ?? number(row, "月薪中位数预测"), experience_mean: number(row, "最低经验年限均值") ?? number(row, "最低经验年限均值预测"), is_forecast: row["数据类型"] === "预测值" })), "canonical_name,year");
+  const monthlyRows = deduplicateByKey(monthly.map((row) => ({ canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), month: text(row, "月份")!, demand_per_10k: number(row, "每万岗位需求数"), salary_median: number(row, "月薪中位数"), experience_mean: number(row, "最低经验年限均值"), is_forecast: row["数据类型"] === "预测值" })), (row) => `${row.canonical_name}\u0000${row.month}`);
+  await upsert("skill_monthly_trends", monthlyRows, "canonical_name,month");
+  await upsert("skill_ai_exposure", ai.map((row) => ({ canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), ai_group: text(row, "AI渗透率职业组")!, demand_share_2025: number(row, "2025年组内技能需求占比"), demand_share_2028: number(row, "2028年组内技能需求占比预测") })), "canonical_name,ai_group");
 }
 
-async function main() { await importSkills(); await importAliases(); await importRelations(); await importSupplemental(); }
+async function main() {
+  const section = resolveImportSectionFromArgs(process.argv.slice(2));
+  if (section === "all" || section === "skills") await importSkills();
+  if (section === "skills") return;
+
+  const canonicalSkillNameLookup = await loadCanonicalSkillNameLookup();
+  if (section === "all" || section === "aliases") await importAliases(canonicalSkillNameLookup);
+  if (section === "all" || section === "relations") await importRelations(canonicalSkillNameLookup);
+  if (section === "all" || section === "supplemental") await importSupplemental(canonicalSkillNameLookup);
+}
 void main().catch((error: unknown) => { console.error(error); process.exitCode = 1; });
