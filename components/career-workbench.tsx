@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronRight, CircleHelp, Clock3, LoaderCircle, LogOut, MessageSquareText, Plus, Sparkles } from "lucide-react";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { formatOtpSendError } from "@/lib/auth-error";
 import { getEmailRedirectUrl } from "@/lib/auth-redirect";
 import { buildEvidencePreview, type EvidencePreview } from "@/lib/career-presentation";
 import { decodeChatStream } from "@/lib/chat-stream";
@@ -74,7 +75,7 @@ export function CareerWorkbench() {
       email,
       options: { emailRedirectTo: getEmailRedirectUrl(window.location.origin) }
     });
-    if (signInError) return setAuthError("验证码发送失败，请检查邮箱地址或 Supabase 邮件配置。");
+    if (signInError) return setAuthError(formatOtpSendError(signInError.message));
     setOtpSent(true);
   }
 
