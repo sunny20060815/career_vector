@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronRight, CircleHelp, Clock3, LoaderCircle, LogOut, MessageSquareText, Plus, Sparkles } from "lucide-react";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { getEmailRedirectUrl } from "@/lib/auth-redirect";
 import { buildEvidencePreview, type EvidencePreview } from "@/lib/career-presentation";
 import { decodeChatStream } from "@/lib/chat-stream";
 import type { ChatEvidenceEvent, ChatProgress, ChatResponse } from "@/types/api";
@@ -69,7 +70,10 @@ export function CareerWorkbench() {
   async function sendOtp(event: FormEvent) {
     event.preventDefault();
     setAuthError("");
-    const { error: signInError } = await createBrowserSupabaseClient().auth.signInWithOtp({ email });
+    const { error: signInError } = await createBrowserSupabaseClient().auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: getEmailRedirectUrl(window.location.origin) }
+    });
     if (signInError) return setAuthError("验证码发送失败，请检查邮箱地址或 Supabase 邮件配置。");
     setOtpSent(true);
   }
