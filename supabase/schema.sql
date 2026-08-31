@@ -115,6 +115,51 @@ create table if not exists public.skill_ai_exposure (
   unique (canonical_name, ai_group)
 );
 
+create table if not exists public.major_programs (
+  program_key text primary key,
+  school text not null,
+  cohort text not null,
+  college text,
+  major text not null,
+  direction text,
+  title text,
+  major_code text,
+  aliases text,
+  training_objectives text,
+  ability_requirements text,
+  core_courses text,
+  program_features text,
+  degree_summary text
+);
+
+create table if not exists public.major_skills (
+  program_key text not null references public.major_programs(program_key) on delete cascade,
+  canonical_name text not null references public.skills(canonical_name),
+  skill_type text,
+  cluster_name text,
+  supply_score numeric,
+  distinctiveness_score numeric,
+  rank integer,
+  evidence_summary text,
+  mapping_basis text,
+  is_representative boolean not null default false,
+  primary key (program_key, canonical_name)
+);
+
+create table if not exists public.occupation_catalog (
+  occupation_code text primary key,
+  occupation_name text not null,
+  description text,
+  subclass_code text not null,
+  subclass_name text not null,
+  major_code text,
+  major_name text,
+  middle_code text,
+  middle_name text,
+  is_displayable boolean not null default true,
+  source text
+);
+
 create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -140,6 +185,9 @@ create index if not exists city_skill_forecasts_skill_year_idx on public.city_sk
 create index if not exists pair_occupation_stats_pair_idx on public.pair_occupation_stats(pair_id);
 create index if not exists pair_city_stats_pair_idx on public.pair_city_stats(pair_id);
 create index if not exists messages_conversation_created_idx on public.messages(conversation_id, created_at);
+create index if not exists major_programs_school_cohort_major_idx on public.major_programs(school, cohort, major);
+create index if not exists major_skills_program_rank_idx on public.major_skills(program_key, rank);
+create index if not exists occupation_catalog_subclass_idx on public.occupation_catalog(subclass_code);
 
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
@@ -153,6 +201,9 @@ alter table public.pair_city_stats enable row level security;
 alter table public.skill_yearly_trends enable row level security;
 alter table public.skill_monthly_trends enable row level security;
 alter table public.skill_ai_exposure enable row level security;
+alter table public.major_programs enable row level security;
+alter table public.major_skills enable row level security;
+alter table public.occupation_catalog enable row level security;
 
 create policy "users manage own conversations" on public.conversations
   for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);

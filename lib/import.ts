@@ -9,7 +9,7 @@ export interface CanonicalSkillName {
   aliases?: readonly string[];
 }
 
-export const importSections = ["skills", "aliases", "relations", "supplemental"] as const;
+export const importSections = ["skills", "aliases", "relations", "curriculum", "supplemental"] as const;
 
 export type ImportSection = (typeof importSections)[number] | "all";
 

@@ -7,7 +7,7 @@ describe("buildDeepSeekPayload", () => {
     expect(buildDeepSeekPayload("deepseek-v4-flash", [{ role: "user", content: "测试" }])).toMatchObject({
       model: "deepseek-v4-flash",
       stream: false,
-      max_tokens: 700,
+      max_tokens: 1500,
       thinking: { type: "disabled" }
     });
   });

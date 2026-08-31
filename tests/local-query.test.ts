@@ -24,4 +24,18 @@ describe("parseCareerQuestionLocally", () => {
       intent: "career_recommendation"
     });
   });
+
+  it("matches a CUEB cohort and major from natural language", () => {
+    expect(parseCareerQuestionLocally(
+      "我是首经贸2024级经济学（实验班）专业的学生，我会 Python",
+      catalog,
+      [{ programKey: "cueb-2024-econ-lab", school: "首都经济贸易大学", cohort: "2024级", major: "经济学（实验班）", aliases: ["经济学实验班"] }]
+    )).toMatchObject({
+      skills: ["Python"],
+      programKey: "cueb-2024-econ-lab",
+      school: "首都经济贸易大学",
+      cohort: "2024级",
+      major: "经济学（实验班）"
+    });
+  });
 });
