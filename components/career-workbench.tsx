@@ -6,6 +6,7 @@ import { ArrowUp, ChevronRight, CircleHelp, Clock3, LoaderCircle, LogOut, Messag
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { formatOtpSendError } from "@/lib/auth-error";
 import { getEmailRedirectUrl } from "@/lib/auth-redirect";
+import { getSessionEmail } from "@/lib/auth-session";
 import { buildEvidencePreview, type EvidencePreview } from "@/lib/career-presentation";
 import { decodeChatStream } from "@/lib/chat-stream";
 import type { ChatEvidenceEvent, ChatProgress, ChatResponse } from "@/types/api";
@@ -37,12 +38,17 @@ export function CareerWorkbench() {
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
-    void supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) {
-        setUserEmail(data.user.email);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionEmail = getSessionEmail(session);
+      setUserEmail(sessionEmail);
+
+      if (sessionEmail) {
         void loadConversations();
       }
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   function resizeTextarea() {
