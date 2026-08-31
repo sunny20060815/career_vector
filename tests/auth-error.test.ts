@@ -14,4 +14,8 @@ describe("formatOtpSendError", () => {
       "验证码发送过于频繁，请等待 60 秒后再试。"
     );
   });
+
+  it("preserves an hourly or provider rate-limit message instead of claiming a 60-second cooldown", () => {
+    expect(formatOtpSendError("Email rate limit exceeded")).toBe("验证码发送失败：Email rate limit exceeded");
+  });
 });
