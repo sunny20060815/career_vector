@@ -2,21 +2,134 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
+:root { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
   min-width: 320px;
-  color: #202522;
-  background: #f4f5f2;
+  color: #e8f1ed;
+  background: #060b0c;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 button, textarea, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
 
 ::selection { color: #f7faf7; background: #257565; }
 
-@keyframes pulse-bar { 50% { opacity: 0.35; transform: scaleY(0.45); } }
-.loading-bar { animation: pulse-bar 0.9s ease-in-out infinite; transform-origin: bottom; }
+.app-shell {
+  background-color: #060b0c;
+  background-image:
+    linear-gradient(rgba(78, 221, 189, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(78, 221, 189, 0.025) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+* {
+  scrollbar-color: #24443e #091211;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: #091211; }
+*::-webkit-scrollbar-thumb { background: #24443e; border: 2px solid #091211; }
+
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: #4eddbd;
+  box-shadow: 0 0 0 3px rgba(78, 221, 189, 0.12);
+  animation: signal-pulse 2.1s ease-in-out infinite;
+}
+
+.matrix-label {
+  position: absolute;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: #4f756c;
+}
+
+.matrix-line,
+.login-beam {
+  position: absolute;
+  left: 17%;
+  top: 57%;
+  height: 1px;
+  background: rgba(72, 201, 174, 0.32);
+  transform-origin: left center;
+}
+
+.matrix-line-a { width: 56%; transform: rotate(-23deg); }
+.matrix-line-b { width: 64%; transform: rotate(9deg); }
+.matrix-line-c { width: 50%; transform: rotate(31deg); background: rgba(218, 133, 96, 0.27); }
+
+.matrix-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.09em;
+  color: #698c83;
+}
+
+.matrix-node b,
+.login-node {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border: 1px solid #60dfc3;
+  background: #153a32;
+  box-shadow: 0 0 12px rgba(78, 221, 189, 0.28);
+}
+
+.matrix-node-1 { left: 13%; top: 53%; color: #70e4cb; }
+.matrix-node-2 { left: 39%; top: 25%; }
+.matrix-node-3 { left: 67%; top: 31%; }
+.matrix-node-4 { left: 74%; top: 66%; }
+.matrix-node-5 { left: 47%; top: 72%; }
+.matrix-node-6 { left: 22%; top: 76%; }
+.matrix-node-7 { left: 81%; top: 47%; }
+
+.login-node { position: absolute; }
+.login-beam { left: 18%; top: 68%; }
+.beam-a { width: 56%; transform: rotate(-31deg); }
+.beam-b { width: 67%; transform: rotate(-8deg); }
+.beam-c { width: 73%; transform: rotate(3deg); background: rgba(215, 129, 91, 0.26); }
+
+.login-scan {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(78, 221, 189, 0.42);
+  box-shadow: 0 0 18px rgba(78, 221, 189, 0.38);
+  animation: scan-grid 4.8s linear infinite;
+}
+
+.thinking-bar { transform-origin: bottom; }
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .composer-dock { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+}
+
+@keyframes signal-pulse {
+  50% { opacity: 0.48; box-shadow: 0 0 0 5px rgba(78, 221, 189, 0.04); }
+}
+
+@keyframes scan-grid {
+  from { left: 0; }
+  to { left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

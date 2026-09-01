@@ -42,5 +42,8 @@ export const env = {
   deepseekAnswerModel: () => process.env.DEEPSEEK_ANSWER_MODEL ?? "deepseek-v4-flash",
   supabaseUrl: () => required("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseAnonKey: () => required("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-  supabaseServiceRoleKey: () => required("SUPABASE_SERVICE_ROLE_KEY")
+  supabaseServiceRoleKey: () => required("SUPABASE_SERVICE_ROLE_KEY"),
+  resendApiKey: () => required("RESEND_API_KEY"),
+  feedbackToEmail: () => process.env.FEEDBACK_TO_EMAIL ?? "32024030101@cueb.edu.cn",
+  feedbackFromEmail: () => process.env.FEEDBACK_FROM_EMAIL ?? "职向量 <feedback@zhivector.com>"
 };
