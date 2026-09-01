@@ -115,6 +115,14 @@ create table if not exists public.skill_ai_exposure (
   unique (canonical_name, ai_group)
 );
 
+create table if not exists public.ai_skill_cooccurrence (
+  canonical_name text primary key references public.skills(canonical_name) on delete cascade,
+  cooccurrence_npmi numeric,
+  historical_ai_collaboration_share numeric,
+  source text,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.major_programs (
   program_key text primary key,
   school text not null,
@@ -188,6 +196,7 @@ create index if not exists messages_conversation_created_idx on public.messages(
 create index if not exists major_programs_school_cohort_major_idx on public.major_programs(school, cohort, major);
 create index if not exists major_skills_program_rank_idx on public.major_skills(program_key, rank);
 create index if not exists occupation_catalog_subclass_idx on public.occupation_catalog(subclass_code);
+create index if not exists ai_skill_cooccurrence_npmi_idx on public.ai_skill_cooccurrence(cooccurrence_npmi desc);
 
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
@@ -201,6 +210,7 @@ alter table public.pair_city_stats enable row level security;
 alter table public.skill_yearly_trends enable row level security;
 alter table public.skill_monthly_trends enable row level security;
 alter table public.skill_ai_exposure enable row level security;
+alter table public.ai_skill_cooccurrence enable row level security;
 alter table public.major_programs enable row level security;
 alter table public.major_skills enable row level security;
 alter table public.occupation_catalog enable row level security;

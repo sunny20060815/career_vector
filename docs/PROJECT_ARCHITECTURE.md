@@ -6,7 +6,7 @@
 
 项目的核心原则如下：
 
-- **事实优先**：模型不能凭空生成就业市场数据，所有建议必须来自 Supabase 中已入库的招聘聚合证据。
+- **事实优先**：模型不能凭空生成就业市场数据，所有建议必须来自 Supabase 中已入库的招聘聚合证据；仅四类尚未入库的可选资料允许使用精确本地索引兜底。
 - **结论优先**：用户要的是“下一步怎么选”，而不是字段、分数和原始 JSON 的复述。
 - **组合边界明确**：只有数据库中直接观测到的技能组合，才使用组合职业证据；没有直接观测时，不推断工资互补效应或组合前景。
 - **低延迟可感知**：用户在等待最终文字建议时，先看到系统已检索到哪些技能、职业、城市和数据来源表。
@@ -70,10 +70,10 @@ npm run import:data
 - 读取 `skills_full.csv`，建立技能主表与预测 JSON。
 - 用 `skill_aliases.csv` 建立别名到标准技能名称的映射。
 - 规范化技能名称与技能对顺序，避免同一组合重复。
-- 分别写入职业、城市、技能组合、年度/月度趋势、AI 暴露度、培养方案和职业大典明细。
+- 分别写入职业、城市、技能组合、年度/月度趋势、AI 暴露度、AI 技能共现、培养方案、专业技能映射和职业大典明细。
 - 支持按 `--section skills|aliases|relations|curriculum|supplemental` 分段重跑。
 
-`data/` 被 `.vercelignore` 排除，因此 Vercel 线上函数不携带 CSV，也不依赖本地文件系统。
+Vercel 默认排除 `data/`。为了让尚未导入的可选资料仍可用，`.vercelignore` 与 `next.config.ts` 仅允许并追踪四份索引：`08_AI技能共现关系表.csv`、`09_专业培养方案主表.csv`、`10_专业技能关系表.csv`、`11_职业大典职业明细表.csv`。线上仍以 Supabase 为第一数据源；只在可选表查询失败或返回空记录时使用这些索引。
 
 ## 4. Supabase 表与当前用途
 
@@ -89,6 +89,7 @@ npm run import:data
 | `skill_yearly_trends` | `skill_yearly_trends.csv` | 年度需求、薪资和经验趋势。 | 已导入，预留给趋势图和细粒度解读。 |
 | `skill_monthly_trends` | `skill_monthly_trends.csv` | 月度趋势。 | 已导入，预留给时间序列展示。 |
 | `skill_ai_exposure` | `skill_ai_exposure.csv` | 技能在 AI 渗透职业组中的变化。 | 已导入，预留给 AI 分组解释。 |
+| `ai_skill_cooccurrence` | `08_AI技能共现关系表.csv` | 技能与 AI 核心技能的共现强度、历史协同占比和口径。 | AI 共现解释的优先来源；表缺失时使用同名本地索引。 |
 | `major_programs` | 高校培养方案汇总 | 学校、届别、专业、培养目标、课程与能力要求。 | 用户给出学校/专业时补充培养路径。 |
 | `major_skills` | 课程到技能映射 | 培养方案中有代表性的推断技能及依据。 | 明确区分课程覆盖和用户确认技能。 |
 | `occupation_catalog` | 职业大典映射 | 职业小类与代表性具体职业。 | 把抽象职业小类解释成可理解的具体职业。 |
@@ -153,7 +154,8 @@ sequenceDiagram
 3. 仅查询包含已识别技能的 `skill_pairs` 记录，而不是每次读取完整组合表。
 4. 只有当用户技能确实构成数据库中的技能对时，才继续读取 `pair_occupation_stats`。
 5. 用户给出可匹配的学校、届别或专业时，补充读取 `major_programs`、`major_skills`；职业大典明细可用时读取 `occupation_catalog`。
-6. 生成 `CareerEvidence`：技能画像、职业排序、城市排序、下一技能、已观测组合数、培养方案和偏好说明。
+6. 并发读取 `skill_ai_exposure` 和 `ai_skill_cooccurrence`，补充 AI 渗透职业组、需求占比和共现解释。
+7. 生成 `CareerEvidence`：技能画像、职业排序、城市排序、下一技能、带需求/工资指标的已观测组合、培养方案、职业大典与 AI 证据、偏好说明。
 
 职业排序会综合单项技能的匹配概率、职业集中度和未来需求；存在直接组合证据时才增加组合权重。城市排序按目标年份的技能需求强度计算，用户指定城市只作为软加分，不会把其他城市完全过滤掉。
 
@@ -196,7 +198,7 @@ sequenceDiagram
 - 先给职业选择结论，再解释职业、城市、趋势和下一步动作。
 - 只保留对决策有影响的少量数字，不复述 JSON、算法或表名。
 - 对没有直接观测的组合明确说明边界，不夸大组合价值。
-- 总输出目标为 700-1200 个汉字，并以具体行动收尾。
+- 总输出目标为 1200-2200 个汉字；课程、职业大典、组合和 AI 证据齐全时可扩展到 3000 字，以完整保留需求率、需求强度、工资、学历、经验、城市和 AI 解释。
 
 ### 6.3 思考模式、可见回答与超时控制
 
@@ -208,9 +210,9 @@ thinking: { type: "enabled" }
 
 思考发生在 DeepSeek 服务端。`DeepSeekResponse` 与后续 SSE、数据库消息只读取 `choices[].message.content`，不会传输、保存或展示 `reasoning_content`。请求还设置：
 
-- `max_tokens: 2200`，为思考和 700-1200 字的可见解读保留输出预算。
+- `max_tokens: 6000`，为思考和完整的可见解读保留输出预算。
 - `DEEPSEEK_ANSWER_TIMEOUT_MS=50000`，通过 `AbortSignal.timeout` 把模型阶段限制在 50 秒。
-- `limitCareerAnswer(answer, 1200)`，按中文句子边界截断过长回答，不截断在半句中。
+- `limitCareerAnswer(answer, 4200)`，按中文句子边界截断过长回答，不截断在半句中。
 - `DEEPSEEK_THINKING_MODE` 只允许 `enabled` 或 `disabled`，默认是 `enabled`，便于测试或成本控制时显式切换。
 
 思考模式不使用 `temperature`，因为该参数在 DeepSeek 思考模式中没有效果。DeepSeek 允许通过 `thinking.type` 显式开启或关闭，并把推理与最终 `content` 分开返回；本项目只消费后者。[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
@@ -219,10 +221,10 @@ thinking: { type: "enabled" }
 
 `app/api/chat/route.ts` 与 `vercel.json` 都将函数时限设为 60 秒。若模型网络错误、返回无效内容或超过 50 秒，接口不会报空白结果。`formatFallbackCareerAnswer` 基于同一份 `CareerEvidence` 输出：
 
-1. 可匹配的职业方向。
-2. 优先城市。
-3. 上升趋势技能。
-4. 下一步建议学习的技能。
+1. 每项技能的需求率、需求强度、工资、经验、学历、预测与 AI 共现解释。
+2. 可匹配职业、职业大典代表职业和优先城市。
+3. 已观测技能组合的共现、需求与工资互补指标；没有直接观测时的明确边界。
+4. 培养方案基础、用户确认技能、下一项技能和可执行行动。
 
 这保证了“模型慢”不会变成“用户没有答案”。
 
@@ -246,7 +248,7 @@ thinking: { type: "enabled" }
 | 缩小组合查询 | 分别按 `skill_a`、`skill_b` 查询命中技能。 | 避免传输无关组合记录。 |
 | 证据先返回 | SSE `evidence` 事件。 | 用户在模型生成前即可看到系统已找到的依据。 |
 | 思考模式生成 | 一次 `thinking.enabled` 调用，只读取最终 `content`。 | 获得更完整的解释，同时不暴露推理原文。 |
-| 输出限长 | `max_tokens: 2200` + 1200 字句子边界截断。 | 控制等待时间、成本和阅读负担。 |
+| 完整输出 | `max_tokens: 6000` + 4200 字句子边界截断。 | 在一分钟服务端上限内保留完整证据解释；超时仍由本地答案兜底。 |
 | 超时兜底 | 50 秒模型超时后本地回答，函数上限为 60 秒。 | 为持久化和 SSE 结束预留约 10 秒，避免无限加载。 |
 
 ### 7.3 历史基线（改动前的非思考模式）

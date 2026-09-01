@@ -28,6 +28,7 @@ const FILES = {
   cities: "02_关系表/05_城市技能关系表.csv",
   pairOccupations: "02_关系表/06_技能组合职业关系表.csv",
   pairCities: "02_关系表/07_技能组合城市关系表.csv",
+  aiCooccurrence: "02_关系表/08_AI技能共现关系表.csv",
   programs: "02_关系表/09_专业培养方案主表.csv",
   majorSkills: "02_关系表/10_专业技能关系表.csv",
   occupationCatalog: "02_关系表/11_职业大典职业明细表.csv"
@@ -102,7 +103,7 @@ async function importAliases(canonicalSkillNameLookup: ReadonlyMap<string, strin
 }
 
 async function importRelations(canonicalSkillNameLookup: ReadonlyMap<string, string>) {
-  const [pairs, occupations, cities, pairOccupations, pairCities] = await Promise.all([readCsv(FILES.pairs), readCsv(FILES.occupations), readCsv(FILES.cities), readCsv(FILES.pairOccupations), readCsv(FILES.pairCities)]);
+  const [pairs, occupations, cities, pairOccupations, pairCities, aiCooccurrence] = await Promise.all([readCsv(FILES.pairs), readCsv(FILES.occupations), readCsv(FILES.cities), readCsv(FILES.pairOccupations), readCsv(FILES.pairCities), readCsv(FILES.aiCooccurrence)]);
   await upsert("skill_pairs", pairs.filter((row) => row["组合层级"] === "标准技能组合" && text(row, "标准技能名称_技能一") && text(row, "标准技能名称_技能二")).map((row) => {
     const [skillA, skillB] = orderSkillPair(resolveCanonicalSkillName(text(row, "标准技能名称_技能一")!, canonicalSkillNameLookup), resolveCanonicalSkillName(text(row, "标准技能名称_技能二")!, canonicalSkillNameLookup));
     return { id: text(row, "技能组合编号")!, skill_a: skillA, skill_b: skillB, npmi: number(row, "标准化共现强度_NPMI") ?? number(row, "NPMI_2016_2025"), wage_complement_pct: number(row, "工资互补效应_%") ?? number(row, "strict_complement_pct"), wage_complement_p_value: number(row, "互补效应BH调整p值") ?? number(row, "strict_complement_bh_p"), demand_rate_2025: number(row, "2025组合需求率"), demand_rate_2028: number(row, "2028组合需求率预测"), demand_growth_pct: number(row, "2025_2028需求增长_%"), evidence_level: text(row, "互补证据等级") ?? text(row, "证据等级") };
@@ -111,6 +112,12 @@ async function importRelations(canonicalSkillNameLookup: ReadonlyMap<string, str
   await upsert("city_skill_forecasts", cities.map((row) => ({ id: text(row, "城市技能关系主键")!, canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), city: text(row, "城市")!, forecast_year: number(row, "预测年份")!, demand_ratio: number(row, "城市内技能需求占比预测"), demand_per_10k: number(row, "每万岗位需求数预测"), demand_volume_index: null })), "id");
   await upsert("pair_occupation_stats", pairOccupations.map((row) => ({ id: text(row, "组合职业关系主键")!, pair_id: text(row, "技能组合编号")!, occupation_code: text(row, "职业小类代码")!, occupation_name: text(row, "职业小类名称")!, probability: number(row, "掌握组合后进入该职业概率") ?? 0, concentration: number(row, "职业组合相对集中度") ?? 0 })), "id");
   await upsert("pair_city_stats", pairCities.map((row) => ({ id: text(row, "组合城市关系主键")!, pair_id: text(row, "技能组合编号")!, city: text(row, "城市")!, probability: number(row, "掌握组合后进入该城市概率") ?? 0, concentration: number(row, "城市组合相对集中度") ?? 0 })), "id");
+  await upsert("ai_skill_cooccurrence", aiCooccurrence.map((row) => ({
+    canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup),
+    cooccurrence_npmi: number(row, "与AI共现强度_NPMI"),
+    historical_ai_collaboration_share: number(row, "历史AI协同占比"),
+    source: text(row, "指标口径")
+  })), "canonical_name");
 }
 
 async function importCurriculum(canonicalSkillNameLookup: ReadonlyMap<string, string>) {
