@@ -28,6 +28,7 @@ const FILES = {
   cities: "02_关系表/05_城市技能关系表.csv",
   pairOccupations: "02_关系表/06_技能组合职业关系表.csv",
   pairCities: "02_关系表/07_技能组合城市关系表.csv",
+  aiCooccurrence: "02_关系表/08_AI技能共现关系表.csv",
   programs: "02_关系表/09_专业培养方案主表.csv",
   majorSkills: "02_关系表/10_专业技能关系表.csv",
   occupationCatalog: "02_关系表/11_职业大典职业明细表.csv"
@@ -84,15 +85,20 @@ function forecast(row: SourceRow, year: number): object {
 }
 
 async function importSkills() {
-  const rows = await readCsv(FILES.skills);
-  await upsert("skills", rows.map((row) => ({
-    canonical_name: text(row, "标准技能名称")!, display_name: text(row, "技能展示名称") ?? text(row, "标准技能名称")!, normalized_name: normaliseSkillName(text(row, "标准技能名称")!),
-    skill_type: text(row, "技能一级类型"), cluster_name: text(row, "技能簇名称"), is_ai_core: boolean(row, "是否AI核心技能"),
-    demand_per_10k_2025: number(row, "2025年每万岗位需求数"), salary_median_2025: number(row, "2025年月薪中位数"), experience_mean_2025: number(row, "2025年最低经验年限均值"),
-    bachelor_or_above_share_2025: (number(row, "2025年本科学历占比") ?? 0) + (number(row, "2025年硕士学历占比") ?? 0) + (number(row, "2025年博士学历占比") ?? 0),
-    graduate_share_2025: (number(row, "2025年硕士学历占比") ?? 0) + (number(row, "2025年博士学历占比") ?? 0), ai_exposure: number(row, "关联职业加权AI暴露度"), ai_group: text(row, "主要AI渗透率职业组"),
-    ai_cooccurrence_npmi: number(row, "AI共现强度_NPMI"), ai_cooccurrence_share: number(row, "历史AI协同占比"), forecast_2026: forecast(row, 2026), forecast_2027: forecast(row, 2027), forecast_2028: forecast(row, 2028), fact_summary: text(row, "面向大模型的事实摘要"), data_version: text(row, "数据版本")
-  })), "canonical_name");
+  const [rows, aiRows] = await Promise.all([readCsv(FILES.skills), readCsv(FILES.aiCooccurrence)]);
+  const aiBySkill = new Map(aiRows.map((row) => [text(row, "标准技能名称"), row]));
+  await upsert("skills", rows.map((row) => {
+    const ai = aiBySkill.get(text(row, "标准技能名称"));
+    return {
+      canonical_name: text(row, "标准技能名称")!, display_name: text(row, "技能展示名称") ?? text(row, "标准技能名称")!, normalized_name: normaliseSkillName(text(row, "标准技能名称")!),
+      skill_type: text(row, "技能一级类型"), cluster_name: text(row, "技能簇名称"), is_ai_core: boolean(row, "是否AI核心技能"),
+      demand_per_10k_2025: number(row, "2025年每万岗位需求数"), salary_median_2025: number(row, "2025年月薪中位数"), experience_mean_2025: number(row, "2025年最低经验年限均值"),
+      bachelor_or_above_share_2025: (number(row, "2025年本科学历占比") ?? 0) + (number(row, "2025年硕士学历占比") ?? 0) + (number(row, "2025年博士学历占比") ?? 0),
+      graduate_share_2025: (number(row, "2025年硕士学历占比") ?? 0) + (number(row, "2025年博士学历占比") ?? 0), ai_exposure: number(row, "关联职业加权AI暴露度"), ai_group: text(row, "主要AI渗透率职业组"),
+      ai_cooccurrence_npmi: ai ? number(ai, "与AI共现强度_NPMI") : null, ai_cooccurrence_share: ai ? number(ai, "历史AI协同占比") : null,
+      forecast_2026: forecast(row, 2026), forecast_2027: forecast(row, 2027), forecast_2028: forecast(row, 2028), fact_summary: text(row, "面向大模型的事实摘要"), data_version: text(row, "数据版本")
+    };
+  }), "canonical_name");
 }
 
 async function importAliases(canonicalSkillNameLookup: ReadonlyMap<string, string>) {

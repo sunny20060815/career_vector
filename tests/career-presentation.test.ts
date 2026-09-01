@@ -15,6 +15,7 @@ const evidence: CareerEvidence = {
   cities: [{ city: "上海", score: 93, matchedSkills: ["Python", "药学"], preferred: true }],
   nextSkills: [{ skill: "Linux", relatedTo: "Python", cooccurrence: 0.87 }],
   observedPairCount: 0,
+  observedPairs: [],
   preferenceNotes: ["已将理想城市 上海 作为城市排序加分项。"]
 };
 

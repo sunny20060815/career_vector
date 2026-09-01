@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getBrowserSupabaseConfig, hasSupabasePublicConfig } from "@/lib/env";
+import { getBrowserSupabaseConfig, getDeepSeekAnswerTimeoutMs, getDeepSeekThinkingMode, hasSupabasePublicConfig } from "@/lib/env";
 
 describe("hasSupabasePublicConfig", () => {
   it("returns false when the browser Supabase variables are absent", () => {
@@ -19,5 +19,17 @@ describe("hasSupabasePublicConfig", () => {
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-key"
       })
     ).toEqual({ url: "https://example.supabase.co", anonKey: "public-key" });
+  });
+});
+
+describe("DeepSeek runtime configuration", () => {
+  it("uses deep thinking and a 90 second budget by default", () => {
+    expect(getDeepSeekThinkingMode(undefined)).toBe("enabled");
+    expect(getDeepSeekAnswerTimeoutMs(undefined)).toBe(90_000);
+  });
+
+  it("rejects invalid thinking and timeout values", () => {
+    expect(() => getDeepSeekThinkingMode("sometimes")).toThrow(/enabled/);
+    expect(() => getDeepSeekAnswerTimeoutMs("90001")).toThrow(/90000/);
   });
 });

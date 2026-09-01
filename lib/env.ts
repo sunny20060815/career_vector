@@ -37,9 +37,26 @@ export function getBrowserSupabaseConfig(
   return { url, anonKey };
 }
 
+export function getDeepSeekThinkingMode(value = process.env.DEEPSEEK_THINKING_MODE): "enabled" | "disabled" {
+  if (!value || value === "enabled") return "enabled";
+  if (value === "disabled") return "disabled";
+  throw new Error("DEEPSEEK_THINKING_MODE 只能是 enabled 或 disabled");
+}
+
+export function getDeepSeekAnswerTimeoutMs(value = process.env.DEEPSEEK_ANSWER_TIMEOUT_MS): number {
+  if (!value) return 90_000;
+  const timeout = Number(value);
+  if (!Number.isInteger(timeout) || timeout < 1_000 || timeout > 90_000) {
+    throw new Error("DEEPSEEK_ANSWER_TIMEOUT_MS 必须是 1000 到 90000 之间的整数");
+  }
+  return timeout;
+}
+
 export const env = {
   deepseekApiKey: () => required("DEEPSEEK_API_KEY"),
   deepseekAnswerModel: () => process.env.DEEPSEEK_ANSWER_MODEL ?? "deepseek-v4-flash",
+  deepseekThinkingMode: () => getDeepSeekThinkingMode(),
+  deepseekAnswerTimeoutMs: () => getDeepSeekAnswerTimeoutMs(),
   supabaseUrl: () => required("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseAnonKey: () => required("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   supabaseServiceRoleKey: () => required("SUPABASE_SERVICE_ROLE_KEY"),

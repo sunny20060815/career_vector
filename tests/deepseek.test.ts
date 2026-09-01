@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import { buildDeepSeekPayload, limitCareerAnswer } from "@/lib/deepseek";
 
 describe("buildDeepSeekPayload", () => {
-  it("disables reasoning mode so a short advisory answer has room for visible output", () => {
+  it("enables high-effort reasoning and leaves room for a complete visible answer", () => {
     expect(buildDeepSeekPayload("deepseek-v4-flash", [{ role: "user", content: "测试" }])).toMatchObject({
       model: "deepseek-v4-flash",
       stream: false,
-      max_tokens: 1500,
-      thinking: { type: "disabled" }
+      max_tokens: 6000,
+      thinking: { type: "enabled" },
+      reasoning_effort: "high"
     });
   });
 

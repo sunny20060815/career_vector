@@ -10,7 +10,7 @@
 - **结论优先**：用户要的是“下一步怎么选”，而不是字段、分数和原始 JSON 的复述。
 - **组合边界明确**：只有数据库中直接观测到的技能组合，才使用组合职业证据；没有直接观测时，不推断工资互补效应或组合前景。
 - **低延迟可感知**：用户在等待最终文字建议时，先看到系统已检索到哪些技能、职业、城市和数据来源表。
-- **30 秒可用回答**：模型响应慢或失败时，系统使用相同证据生成本地自然语言建议，避免请求一直停留在加载状态。
+- **100 秒内可靠回答**：深度思考最多使用 90 秒；模型响应慢或失败时，系统使用相同证据生成完整的本地建议。
 
 > 说明：800 多万条原始招聘记录用于离线清洗、职业映射、技能抽取、预测和 AI 渗透率计算。线上应用不直接扫描这 800 万条明细，而是查询其派生出的技能、职业、城市和趋势聚合数据。
 
@@ -22,7 +22,7 @@ flowchart LR
   W -->|OTP 登录、会话 Cookie| SA[Supabase Auth]
   W -->|用户级会话读写| SP[(Supabase PostgreSQL)]
   W -->|service-role 聚合证据检索| SP
-  W -->|一次低延迟职业建议调用| DS[DeepSeek Chat Completions]
+  W -->|一次深度思考职业建议调用| DS[DeepSeek Chat Completions]
 
   RAW[800万+ 历史招聘明细\n2016-2026] --> OFF[离线分析与预测程序]
   OFF --> CSV[data/*.csv 聚合数据]
@@ -72,7 +72,7 @@ npm run import:data
 - 分别写入职业、城市、技能组合、年度/月度趋势和 AI 暴露度数据。
 - 支持按 `--section skills|aliases|relations|supplemental` 分段重跑。
 
-`data/` 被 `.vercelignore` 排除，因此 Vercel 线上函数不携带 CSV，也不依赖本地文件系统。
+Vercel 线上函数仅携带 AI 共现、培养方案、专业技能映射和职业大典四个轻量 CSV，作为可选 Supabase 表尚未导入时的兜底；其余离线数据仍由 `.vercelignore` 排除。
 
 ## 4. Supabase 表与当前用途
 
@@ -120,7 +120,7 @@ sequenceDiagram
   N->>N: 计算职业/城市/下一技能排序
   N-->>B: SSE evidence: 技能、职业、城市、引用表
   N-->>B: SSE status: 正在整理建议
-  N->>D: 一次非思考模式的职业建议请求
+  N->>D: 一次深度思考模式的职业建议请求
   D-->>N: 简洁自然语言建议
   N->>S: 保存 assistant 消息、结构化查询和证据
   N-->>B: SSE complete: answer + evidence
@@ -191,27 +191,27 @@ sequenceDiagram
 - 先给职业选择结论，再解释职业、城市、趋势和下一步动作。
 - 只保留对决策有影响的少量数字，不复述 JSON、算法或表名。
 - 对没有直接观测的组合明确说明边界，不夸大组合价值。
-- 总输出控制在 260-520 个汉字、最多五段，并以具体行动收尾。
+- 在完整覆盖证据的前提下，通常输出 1200-2200 个汉字，并以具体行动收尾。
 
-### 6.3 非思考模式与输出控制
+### 6.3 深度思考模式与输出控制
 
-DeepSeek V4 默认开启思考模式，会先生成 `reasoning_content`，再生成可展示的 `content`。对于本项目的短建议任务，`lib/deepseek.ts` 显式传递：
+DeepSeek V4 会先生成 `reasoning_content`，再生成可展示的 `content`。本项目在服务端显式开启思考模式：
 
 ```ts
-thinking: { type: "disabled" }
+thinking: { type: "enabled" }
 ```
 
-这样模型将 token 直接用于可见建议，而不是长推理过程。请求还设置：
+服务端只读取最终 `content`，不返回或保存推理过程。请求还设置：
 
-- `max_tokens: 700`，限制生成量与成本。
-- `AbortSignal.timeout(16000)`，将模型阶段限制在 16 秒。
-- `limitCareerAnswer(answer, 520)`，按中文句子边界截断过长回答，不截断在半句中。
+- `max_tokens: 6000`，为完整可见回答留出空间。
+- `AbortSignal.timeout(90000)`，将模型阶段限制在 90 秒。
+- `limitCareerAnswer(answer, 4200)`，仅在异常超长时按中文句子边界截断。
 
-官方文档说明 V4 模型默认开启思考模式，也支持显式关闭；本项目采用关闭模式来满足低延迟短答场景。[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
+官方文档说明 V4 模型支持思考模式及推理强度控制；本项目采用 `high` 推理强度。[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
 
 ### 6.4 本地兜底
 
-如果模型网络错误、返回无效内容或超过 16 秒，接口不会报空白结果。`formatFallbackCareerAnswer` 基于同一份 `CareerEvidence` 输出：
+如果模型网络错误、返回无效内容或超过 90 秒，接口不会报空白结果。`formatFallbackCareerAnswer` 基于同一份 `CareerEvidence` 输出完整栏目。
 
 1. 可匹配的职业方向。
 2. 优先城市。
@@ -239,11 +239,11 @@ thinking: { type: "disabled" }
 | 缓存词典 | 进程内缓存 `skills` 与 `skill_aliases`。 | 热启动后的技能解析无需重新加载完整词典。 |
 | 缩小组合查询 | 分别按 `skill_a`、`skill_b` 查询命中技能。 | 避免传输无关组合记录。 |
 | 证据先返回 | SSE `evidence` 事件。 | 用户在模型生成前即可看到系统已找到的依据。 |
-| 非思考模型模式 | `thinking.disabled`。 | 消除不必要推理 token，优先得到可见建议。 |
+| 深度思考模型模式 | `thinking.enabled`、`reasoning_effort: high`。 | 提高复杂职业证据的组织与解释质量。 |
 | 输出限长 | `max_tokens` + 句子边界截断。 | 控制等待时间、成本和阅读负担。 |
-| 超时兜底 | 16 秒超时后本地回答。 | 避免超过 Vercel 的 30 秒函数限制。 |
+| 超时兜底 | 90 秒超时后本地回答。 | 避免超过 Vercel 的 100 秒函数限制。 |
 
-### 7.3 实测基准
+### 7.3 深度思考升级前的实测基准
 
 以“Python、沟通能力、药学，上海，月薪 15000 元”的问题进行真实 Supabase 与 DeepSeek 调用测试：
 
@@ -254,7 +254,7 @@ thinking: { type: "disabled" }
 | DeepSeek 非思考模式建议 | 3.22 秒 |
 | 总计 | **9.03 秒** |
 
-最终模型回答长度为 391 字，满足“30 秒内可用回答”和“不要过长”的目标。网络波动时，即使模型阶段失败，16 秒后会转为本地兜底，整体仍保持在 Vercel 的 30 秒上限内。
+以上结果仅用于记录非思考模式的历史性能，不代表当前深度思考模式的响应时间。当前版本优先保证栏目完整，并在 90 秒模型预算结束后转入本地兜底。
 
 ## 8. 技术栈
 
@@ -269,7 +269,7 @@ thinking: { type: "disabled" }
 | 流式协议 | SSE + Web Streams API | 逐阶段展示状态和证据预览。 |
 | CSV 导入 | `csv-parse` | 将离线聚合结果分批导入 Supabase。 |
 | 测试 | Vitest | 覆盖环境变量、解析、排序、导入、SSE、提示词请求与兜底生成。 |
-| 部署 | Vercel | 托管 Next.js，`vercel.json` 为聊天接口配置 30 秒函数时限。 |
+| 部署 | Vercel | 托管 Next.js，`vercel.json` 为聊天接口配置 100 秒函数时限。 |
 
 ## 9. 安全与权限边界
 
@@ -304,6 +304,6 @@ SUPABASE_SERVICE_ROLE_KEY=
 - 用 `skill_yearly_trends` 与 `skill_monthly_trends` 绘制趋势图，解释变化而不是只输出单点预测。
 - 接入 `pair_city_stats`，在有直接组合证据时增强城市排序。
 - 增加 pgvector，用于岗位描述、高校培养方案和公司财务文本的语义召回。
-- 将高校培养方案映射到技能词典，生成“课程 - 技能 - 职业”培养路径。
+- 将当前首都经济贸易大学培养方案扩展至更多高校和年份。
 - 将公司财务数据接入职业需求模型，观察招聘需求与企业经营指标的关联，但明确区分相关性和因果。
-- 增加运行时指标：各阶段耗时、模型兜底率、未识别技能比例和用户满意度，用于持续优化 30 秒服务目标。
+- 增加运行时指标：各阶段耗时、模型兜底率、未识别技能比例和用户满意度，用于持续优化完整性、成本与等待时间。
