@@ -10,7 +10,7 @@
 - **结论优先**：用户要的是“下一步怎么选”，而不是字段、分数和原始 JSON 的复述。
 - **组合边界明确**：只有数据库中直接观测到的技能组合，才使用组合职业证据；没有直接观测时，不推断工资互补效应或组合前景。
 - **低延迟可感知**：用户在等待最终文字建议时，先看到系统已检索到哪些技能、职业、城市和数据来源表。
-- **30 秒可用回答**：模型响应慢或失败时，系统使用相同证据生成本地自然语言建议，避免请求一直停留在加载状态。
+- **一分钟内可用回答**：模型响应慢或失败时，系统使用相同证据生成本地自然语言建议，避免请求一直停留在加载状态。
 
 > 说明：800 多万条原始招聘记录用于离线清洗、职业映射、技能抽取、预测和 AI 渗透率计算。线上应用不直接扫描这 800 万条明细，而是查询其派生出的技能、职业、城市和趋势聚合数据。
 
@@ -22,7 +22,7 @@ flowchart LR
   W -->|OTP 登录、会话 Cookie| SA[Supabase Auth]
   W -->|用户级会话读写| SP[(Supabase PostgreSQL)]
   W -->|service-role 聚合证据检索| SP
-  W -->|一次低延迟职业建议调用| DS[DeepSeek Chat Completions]
+  W -->|一次受时间约束的思考模式调用| DS[DeepSeek Chat Completions]
 
   RAW[800万+ 历史招聘明细\n2016-2026] --> OFF[离线分析与预测程序]
   OFF --> CSV[data/*.csv 聚合数据]
@@ -120,8 +120,8 @@ sequenceDiagram
   N->>N: 计算职业/城市/下一技能排序
   N-->>B: SSE evidence: 技能、职业、城市、引用表
   N-->>B: SSE status: 正在整理建议
-  N->>D: 一次非思考模式的职业建议请求
-  D-->>N: 简洁自然语言建议
+  N->>D: 一次思考模式的职业建议请求
+  D-->>N: 最终 content（不含推理原文）
   N->>S: 保存 assistant 消息、结构化查询和证据
   N-->>B: SSE complete: answer + evidence
 ```
@@ -191,27 +191,28 @@ sequenceDiagram
 - 先给职业选择结论，再解释职业、城市、趋势和下一步动作。
 - 只保留对决策有影响的少量数字，不复述 JSON、算法或表名。
 - 对没有直接观测的组合明确说明边界，不夸大组合价值。
-- 总输出控制在 260-520 个汉字、最多五段，并以具体行动收尾。
+- 总输出目标为 700-1000 个汉字、最多六段，并以具体行动收尾。
 
-### 6.3 非思考模式与输出控制
+### 6.3 思考模式、可见回答与超时控制
 
-DeepSeek V4 默认开启思考模式，会先生成 `reasoning_content`，再生成可展示的 `content`。对于本项目的短建议任务，`lib/deepseek.ts` 显式传递：
+DeepSeek V4 会在思考模式下生成 `reasoning_content` 和可展示的 `content`。本项目显式传递：
 
 ```ts
-thinking: { type: "disabled" }
+thinking: { type: "enabled" }
 ```
 
-这样模型将 token 直接用于可见建议，而不是长推理过程。请求还设置：
+思考发生在 DeepSeek 服务端。`DeepSeekResponse` 与后续 SSE、数据库消息只读取 `choices[].message.content`，不会传输、保存或展示 `reasoning_content`。请求还设置：
 
-- `max_tokens: 700`，限制生成量与成本。
-- `AbortSignal.timeout(16000)`，将模型阶段限制在 16 秒。
-- `limitCareerAnswer(answer, 520)`，按中文句子边界截断过长回答，不截断在半句中。
+- `max_tokens: 2200`，为思考和 700-1000 字的可见解读保留输出预算。
+- `DEEPSEEK_ANSWER_TIMEOUT_MS=50000`，通过 `AbortSignal.timeout` 把模型阶段限制在 50 秒。
+- `limitCareerAnswer(answer, 1000)`，按中文句子边界截断过长回答，不截断在半句中。
+- `DEEPSEEK_THINKING_MODE` 只允许 `enabled` 或 `disabled`，默认是 `enabled`，便于测试或成本控制时显式切换。
 
-官方文档说明 V4 模型默认开启思考模式，也支持显式关闭；本项目采用关闭模式来满足低延迟短答场景。[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
+思考模式不使用 `temperature`，因为该参数在 DeepSeek 思考模式中没有效果。DeepSeek 允许通过 `thinking.type` 显式开启或关闭，并把推理与最终 `content` 分开返回；本项目只消费后者。[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
 
 ### 6.4 本地兜底
 
-如果模型网络错误、返回无效内容或超过 16 秒，接口不会报空白结果。`formatFallbackCareerAnswer` 基于同一份 `CareerEvidence` 输出：
+`app/api/chat/route.ts` 与 `vercel.json` 都将函数时限设为 60 秒。若模型网络错误、返回无效内容或超过 50 秒，接口不会报空白结果。`formatFallbackCareerAnswer` 基于同一份 `CareerEvidence` 输出：
 
 1. 可匹配的职业方向。
 2. 优先城市。
@@ -239,11 +240,11 @@ thinking: { type: "disabled" }
 | 缓存词典 | 进程内缓存 `skills` 与 `skill_aliases`。 | 热启动后的技能解析无需重新加载完整词典。 |
 | 缩小组合查询 | 分别按 `skill_a`、`skill_b` 查询命中技能。 | 避免传输无关组合记录。 |
 | 证据先返回 | SSE `evidence` 事件。 | 用户在模型生成前即可看到系统已找到的依据。 |
-| 非思考模型模式 | `thinking.disabled`。 | 消除不必要推理 token，优先得到可见建议。 |
-| 输出限长 | `max_tokens` + 句子边界截断。 | 控制等待时间、成本和阅读负担。 |
-| 超时兜底 | 16 秒超时后本地回答。 | 避免超过 Vercel 的 30 秒函数限制。 |
+| 思考模式生成 | 一次 `thinking.enabled` 调用，只读取最终 `content`。 | 获得更完整的解释，同时不暴露推理原文。 |
+| 输出限长 | `max_tokens: 2200` + 1000 字句子边界截断。 | 控制等待时间、成本和阅读负担。 |
+| 超时兜底 | 50 秒模型超时后本地回答，函数上限为 60 秒。 | 为持久化和 SSE 结束预留约 10 秒，避免无限加载。 |
 
-### 7.3 实测基准
+### 7.3 历史基线（改动前的非思考模式）
 
 以“Python、沟通能力、药学，上海，月薪 15000 元”的问题进行真实 Supabase 与 DeepSeek 调用测试：
 
@@ -254,7 +255,7 @@ thinking: { type: "disabled" }
 | DeepSeek 非思考模式建议 | 3.22 秒 |
 | 总计 | **9.03 秒** |
 
-最终模型回答长度为 391 字，满足“30 秒内可用回答”和“不要过长”的目标。网络波动时，即使模型阶段失败，16 秒后会转为本地兜底，整体仍保持在 Vercel 的 30 秒上限内。
+最终模型回答长度为 391 字。这组数据只用于说明旧版短答路径的性能，不能视为当前思考模式的性能承诺。当前版本先流式返回证据，再给模型最多 50 秒；一旦超时就使用本地兜底，并在 60 秒函数上限内结束响应。
 
 ## 8. 技术栈
 
@@ -265,11 +266,11 @@ thinking: { type: "disabled" }
 | 样式 | Tailwind CSS | 响应式页面、状态区、证据预览与会话侧栏。 |
 | 数据库与认证 | Supabase PostgreSQL、Auth、RLS | 聚合数据查询、Email OTP、用户级会话隔离。 |
 | 数据库 SDK | `@supabase/supabase-js`、`@supabase/ssr` | 浏览器会话、服务端 Cookie、service-role 检索。 |
-| 模型服务 | DeepSeek Chat Completions | 基于受限证据生成自然职业建议。 |
+| 模型服务 | DeepSeek Chat Completions | 基于受限证据进行一次服务端思考，再只返回最终职业建议。 |
 | 流式协议 | SSE + Web Streams API | 逐阶段展示状态和证据预览。 |
 | CSV 导入 | `csv-parse` | 将离线聚合结果分批导入 Supabase。 |
 | 测试 | Vitest | 覆盖环境变量、解析、排序、导入、SSE、提示词请求与兜底生成。 |
-| 部署 | Vercel | 托管 Next.js，`vercel.json` 为聊天接口配置 30 秒函数时限。 |
+| 部署 | Vercel | 托管 Next.js，Route Handler 与 `vercel.json` 为聊天接口配置 60 秒函数时限。 |
 
 ## 9. 安全与权限边界
 
@@ -286,6 +287,8 @@ thinking: { type: "disabled" }
 ```text
 DEEPSEEK_API_KEY=
 DEEPSEEK_ANSWER_MODEL=deepseek-v4-flash
+DEEPSEEK_THINKING_MODE=enabled
+DEEPSEEK_ANSWER_TIMEOUT_MS=50000
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
@@ -293,7 +296,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 同时确认：
 
-1. `vercel.json` 保留 `app/api/chat/route.ts` 的 `maxDuration: 30`。
+1. `app/api/chat/route.ts` 和 `vercel.json` 都保留 `maxDuration: 60`；模型的单独时限保持为 50 秒。
 2. Supabase Auth 的 Site URL 和 Redirect URLs 包含 Vercel 生产域名。
 3. Supabase 中已经执行 `supabase/schema.sql` 并完成 `npm run import:data`。
 4. 不提交 `.env.local`、service-role 密钥或 DeepSeek 密钥。
@@ -306,4 +309,4 @@ SUPABASE_SERVICE_ROLE_KEY=
 - 增加 pgvector，用于岗位描述、高校培养方案和公司财务文本的语义召回。
 - 将高校培养方案映射到技能词典，生成“课程 - 技能 - 职业”培养路径。
 - 将公司财务数据接入职业需求模型，观察招聘需求与企业经营指标的关联，但明确区分相关性和因果。
-- 增加运行时指标：各阶段耗时、模型兜底率、未识别技能比例和用户满意度，用于持续优化 30 秒服务目标。
+- 增加运行时指标：各阶段耗时、模型兜底率、未识别技能比例和用户满意度，用于持续优化一分钟服务目标。
