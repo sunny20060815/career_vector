@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer } from "@/lib/career-presentation";
+import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer, formatNoDataCareerAnswer } from "@/lib/career-presentation";
 import { encodeChatStreamEvent } from "@/lib/chat-stream";
 import { writeCareerAnswer } from "@/lib/deepseek";
 import { parseCareerQuestionFromCatalog, retrieveCareerEvidence } from "@/lib/evidence";
+import { mergeCareerQueryContext } from "@/lib/query";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ChatRequest, ChatResponse } from "@/types/api";
+import type { ParsedCareerQuery } from "@/types/career";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -42,9 +44,12 @@ export async function POST(request: Request) {
           if (!userId) throw new Error("请先登录后再咨询");
 
           let conversationId = body.conversationId;
+          let previousQuery: ParsedCareerQuery | null = null;
           if (conversationId) {
             const { data: conversation, error } = await supabase.from("conversations").select("id").eq("id", conversationId).single();
             if (error || !conversation) throw new Error("会话不存在或无权访问");
+            const { data: previousMessage } = await supabase.from("messages").select("structured_query").eq("conversation_id", conversationId).eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle();
+            previousQuery = (previousMessage?.structured_query as ParsedCareerQuery | null) ?? null;
           } else {
             const { data: conversation, error } = await supabase.from("conversations").insert({ user_id: userId, title: titleFor(question) }).select("id").single();
             if (error || !conversation) throw new Error("无法创建会话");
@@ -54,7 +59,7 @@ export async function POST(request: Request) {
           const { error: userMessageError } = await supabase.from("messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", content: question });
           if (userMessageError) throw new Error("无法保存提问");
 
-          const query = await parseCareerQuestionFromCatalog(question);
+          const query = mergeCareerQueryContext(await parseCareerQuestionFromCatalog(question), previousQuery);
           emit({ type: "status", payload: { stage: "searching", message: "正在从招聘聚合数据中匹配岗位、城市和趋势..." } });
           const evidence = await retrieveCareerEvidence(query);
           const preview = buildEvidencePreview(evidence);
@@ -63,23 +68,18 @@ export async function POST(request: Request) {
           const noData = evidence.recognizedSkills.length === 0;
           let answer: string;
           let suggestedQuestions: string[] = [];
-          if (noData) {
-            answer = "暂无相关记录。系统尚未在已入库的技能词典中识别出你的核心技能，请尝试写出更具体的工具、专业知识或岗位名称。";
-            suggestedQuestions = ["我应该怎样描述自己的专业和技能？", "只输入专业也能进行职业匹配吗？", "可以根据目标职业反推需要学习的技能吗？"];
-          } else {
-            emit({ type: "status", payload: { stage: "writing", message: "已找到可引用的职业证据，正在整理成建议..." } });
-            try {
-              const generated = await writeCareerAnswer(question, evidence);
-              answer = generated.answer;
-              suggestedQuestions = generated.suggestedQuestions.length ? generated.suggestedQuestions : buildSuggestedQuestions(evidence);
-            } catch (error) {
-              console.error("DeepSeek career answer failed; using evidence fallback", {
-                message: error instanceof Error ? error.message : String(error)
-              });
-              emit({ type: "status", payload: { stage: "fallback", message: "生成服务较慢，已依据同一批证据整理建议..." } });
-              answer = formatFallbackCareerAnswer(evidence);
-              suggestedQuestions = buildSuggestedQuestions(evidence);
-            }
+          emit({ type: "status", payload: { stage: "writing", message: noData ? "正在结合你的问题整理可操作的说明..." : "已找到可引用的职业证据，正在整理成建议..." } });
+          try {
+            const generated = await writeCareerAnswer(question, evidence);
+            answer = generated.answer;
+            suggestedQuestions = generated.suggestedQuestions.length ? generated.suggestedQuestions : buildSuggestedQuestions(evidence);
+          } catch (error) {
+            console.error("DeepSeek career answer failed; using evidence fallback", {
+              message: error instanceof Error ? error.message : String(error)
+            });
+            emit({ type: "status", payload: { stage: "fallback", message: "生成服务较慢，正在依据现有信息整理建议..." } });
+            answer = noData ? formatNoDataCareerAnswer(question) : formatFallbackCareerAnswer(evidence);
+            suggestedQuestions = buildSuggestedQuestions(evidence);
           }
           const { error: assistantMessageError } = await supabase.from("messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", content: answer, structured_query: query, evidence });
           if (assistantMessageError) throw new Error("无法保存回答");

@@ -56,6 +56,7 @@ describe("buildDeepSeekPayload", () => {
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("AI 时代就业策略");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得把平台已经能够完成的数据检索工作重新交给用户");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("<suggested_questions>");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("recognizedSkills 为空不等于问题无法回答");
     expect(messages.at(-1)?.content).toContain("\"curriculum\"");
     expect(messages.at(-1)?.content).toContain("\"occupationDetails\"");
     expect(messages.at(-1)?.content).toContain("\"aiExposureDetails\"");

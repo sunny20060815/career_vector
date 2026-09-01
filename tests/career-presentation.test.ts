@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer } from "@/lib/career-presentation";
+import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer, formatNoDataCareerAnswer } from "@/lib/career-presentation";
 import type { CareerEvidence } from "@/lib/evidence";
 
 const evidence: CareerEvidence = {
@@ -88,5 +88,10 @@ describe("career presentation", () => {
       "如果补充Linux，我的职业匹配会发生什么变化？",
       "培养方案中的哪些课程最有助于进入数字技术工程技术人员？"
     ]);
+  });
+
+  it("answers general guidance questions even without recognized skills", () => {
+    expect(formatNoDataCareerAnswer("我应该怎样描述自己的专业和技能？")).toContain("学校与年级+专业+已经掌握的技能");
+    expect(formatNoDataCareerAnswer("培养方案里哪些课程更重要？")).toContain("学校、年级和专业");
   });
 });

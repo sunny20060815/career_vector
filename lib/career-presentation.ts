@@ -50,6 +50,16 @@ export function buildSuggestedQuestions(evidence: CareerEvidence): string[] {
   return Array.from(new Set(questions)).slice(0, 3);
 }
 
+export function formatNoDataCareerAnswer(question: string): string {
+  if (/怎样|怎么|如何/.test(question) && /描述|输入/.test(question)) {
+    return "你可以按“学校与年级+专业+已经掌握的技能+经验或项目+目标职业或城市”来描述。例如：我是首经贸2024级经济学（实验班）学生，会Python和Stata，做过数据分析项目，想在北京寻找数据分析相关岗位。请区分课程接触过的内容与已经能够独立使用的技能，系统会据此分别识别专业基础和个人增强能力。";
+  }
+  if (/培养方案|课程/.test(question)) {
+    return "可以分析，但还需要先确定你的学校、年级和专业，以匹配对应培养方案。请补充类似“首经贸2024级经济学（实验班）”的信息；若再提供目标职业，系统还会比较课程训练与岗位技能需求之间的差距。";
+  }
+  return "这个问题可以继续分析，但目前还缺少能够连接招聘数据的个人或目标信息。请至少补充专业、已掌握技能、目标职业或目标城市中的一项；方法、概念和输入方式类问题也可以直接提问，无需先提供技能。";
+}
+
 function numberValue(row: Record<string, unknown>, key: string): number | null {
   const value = row[key];
   const parsed = typeof value === "number" ? value : Number(value);
