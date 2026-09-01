@@ -5,6 +5,14 @@ export interface LocalSkillCatalogEntry {
   aliases: readonly string[];
 }
 
+export interface LocalProgramCatalogEntry {
+  programKey: string;
+  school: string;
+  cohort: string;
+  major: string;
+  aliases: readonly string[];
+}
+
 const KNOWN_CITIES = [
   "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "成都", "武汉", "西安", "重庆", "天津",
   "长沙", "郑州", "厦门", "青岛", "宁波", "佛山", "东莞", "合肥", "济南", "大连", "沈阳", "昆明"
@@ -40,7 +48,8 @@ function extractIntent(question: string): QueryIntent {
 
 export function parseCareerQuestionLocally(
   question: string,
-  catalog: readonly LocalSkillCatalogEntry[]
+  catalog: readonly LocalSkillCatalogEntry[],
+  programs: readonly LocalProgramCatalogEntry[] = []
 ): ParsedCareerQuery {
   const normalisedQuestion = normalise(question);
   const skills = catalog
@@ -63,6 +72,15 @@ export function parseCareerQuestionLocally(
   const forecastYear = ([2028, 2027, 2026] as const).find((year) => question.includes(String(year))) ?? 2028;
   const experienceMatch = question.match(/(\d+(?:\.\d+)?)\s*年(?:工作)?经验/);
   const education = /博士/.test(question) ? "doctor" : /硕士|研究生/.test(question) ? "master" : /本科/.test(question) ? "bachelor" : /大专/.test(question) ? "associate" : /中专|高中/.test(question) ? "secondary" : null;
+  const cohort = question.match(/20\d{2}(?:级)?/)?.[0].replace("级", "") ?? null;
+  const candidates = programs.filter((program) => !cohort || program.cohort.startsWith(cohort)).map((program) => ({
+    program,
+    matchLength: Math.max(0, ...[program.major, ...program.aliases].map((alias) => {
+      const token = normalise(alias);
+      return token.length > 1 && normalisedQuestion.includes(token) ? token.length : 0;
+    }))
+  })).filter((candidate) => candidate.matchLength > 0).sort((left, right) => right.matchLength - left.matchLength || right.program.cohort.localeCompare(left.program.cohort));
+  const matchedProgram = candidates[0]?.program ?? null;
 
   return {
     skills,
@@ -73,6 +91,10 @@ export function parseCareerQuestionLocally(
     experienceYears: experienceMatch ? Number(experienceMatch[1]) : null,
     education,
     forecastYear,
-    intent: extractIntent(question)
+    intent: extractIntent(question),
+    programKey: matchedProgram?.programKey ?? null,
+    school: matchedProgram?.school ?? (/首经贸|首都经济贸易大学/i.test(question) ? "首都经济贸易大学" : null),
+    cohort: matchedProgram?.cohort ?? cohort,
+    major: matchedProgram?.major ?? null
   };
 }

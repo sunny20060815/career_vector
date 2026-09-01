@@ -52,6 +52,10 @@ function nullableNumber(value: unknown, field: string): number | null {
   return value;
 }
 
+function nullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 export function normaliseSkillToken(value: string): string {
   return value
     .normalize("NFKC")
@@ -95,6 +99,10 @@ export function validateParsedCareerQuery(value: unknown): ParsedCareerQuery {
     experienceYears: nullableNumber(value.experienceYears, "工作经验"),
     education: education as EducationLevel | null,
     forecastYear: forecastYear as ForecastYear,
-    intent: intent as QueryIntent
+    intent: intent as QueryIntent,
+    programKey: nullableString(value.programKey),
+    school: nullableString(value.school),
+    cohort: nullableString(value.cohort),
+    major: nullableString(value.major)
   };
 }

@@ -5,7 +5,7 @@
 ## 本地运行
 
 1. 安装 Node.js 22 LTS。
-2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY` 和 `SUPABASE_SERVICE_ROLE_KEY` 只能保存在本地或 Vercel 服务端环境变量中。默认的 `DEEPSEEK_ANSWER_MODEL=deepseek-v4-flash` 与 `DEEPSEEK_THINKING_MODE=enabled` 会在服务端生成更完整的建议；浏览器只会收到最终回答，不会收到推理原文。`DEEPSEEK_ANSWER_TIMEOUT_MS=50000` 会在模型超过 50 秒时转为本地证据兜底。
+2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY` 和 `RESEND_API_KEY` 只能保存在本地或 Vercel 服务端环境变量中。默认的 `DEEPSEEK_ANSWER_MODEL=deepseek-v4-flash` 与 `DEEPSEEK_THINKING_MODE=enabled` 会在服务端生成更完整的建议；浏览器只会收到最终回答，不会收到推理原文。`DEEPSEEK_ANSWER_TIMEOUT_MS=50000` 会在模型超过 50 秒时转为本地证据兜底。
 3. 执行 `npm install`、`npm test`、`npm run dev`，浏览器访问 `http://localhost:3000`。
 
 ## 初始化 Supabase
@@ -36,8 +36,14 @@
 
 更偏工程细节的说明见 [项目架构与数据流](docs/PROJECT_ARCHITECTURE.md)。
 
+## 配置问题反馈邮件
+
+1. 在 Resend 创建 API Key，并验证 `zhivector.com` 域名。
+2. 在 Vercel 环境变量中设置 `RESEND_API_KEY`。`FEEDBACK_TO_EMAIL` 默认是 `32024030101@cueb.edu.cn`，`FEEDBACK_FROM_EMAIL` 默认是 `职向量 <feedback@zhivector.com>`，需要时可以覆盖。
+3. 重新部署后，登录网站并在“问题反馈”标签提交一条测试信息。反馈只由服务端发送，API Key 不会进入浏览器。
+
 ## 数据边界与扩展
 
 首版只使用当前汇总数据。职业、城市和下一技能评分复刻参考程序的单项证据与直接组合证据原则；没有直接组合观测时，系统不会推断工资互补效应。薪资、经验和学历作为差距说明，理想城市作为软排序偏好。
 
-后续可新增原始岗位明细层、pgvector 语义召回、高校培养方案、公司财务表和更细粒度的“城市-职业-薪资”联表。模型调用集中在 `lib/deepseek.ts`，检索集中在 `lib/evidence.ts`，便于独立替换。
+首版以当前聚合数据为核心，已支持可选的高校培养方案与职业大典明细证据；培养方案覆盖的能力会明确标为“推断技能”，不能当作用户已掌握。后续可新增原始岗位明细层、pgvector 语义召回、公司财务表和更细粒度的“城市-职业-薪资”联表。模型调用集中在 `lib/deepseek.ts`，检索集中在 `lib/evidence.ts`，便于独立替换。

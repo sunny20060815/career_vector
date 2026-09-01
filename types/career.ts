@@ -26,4 +26,8 @@ export interface ParsedCareerQuery {
   education: EducationLevel | null;
   forecastYear: ForecastYear;
   intent: QueryIntent;
+  programKey: string | null;
+  school: string | null;
+  cohort: string | null;
+  major: string | null;
 }

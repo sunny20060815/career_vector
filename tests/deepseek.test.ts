@@ -17,6 +17,7 @@ describe("buildDeepSeekPayload", () => {
 
   it("can disable thinking only through explicit server configuration", () => {
     expect(buildDeepSeekPayload("deepseek-v4-flash", [{ role: "user", content: "测试" }], "disabled")).toMatchObject({
+      max_tokens: 2200,
       thinking: { type: "disabled" }
     });
   });
@@ -29,10 +30,10 @@ describe("buildDeepSeekPayload", () => {
     expect(limited.endsWith("。")).toBe(true);
   });
 
-  it("limits detailed answers to 1000 characters at a sentence boundary", () => {
+  it("limits detailed answers to 1200 characters at a sentence boundary", () => {
     const limited = limitCareerAnswer("职业建议。".repeat(300) + "最后一句。");
 
-    expect(limited.length).toBe(1000);
+    expect(limited.length).toBe(1200);
     expect(limited.endsWith("。")).toBe(true);
   });
 });

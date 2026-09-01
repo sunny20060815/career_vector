@@ -34,13 +34,14 @@ flowchart LR
 
 | 层 | 主要组件 | 职责 |
 |---|---|---|
-| 展示层 | `components/career-workbench.tsx` | 登录、提问、读取流式事件、显示引用证据和最终建议、展示历史会话。 |
+| 展示层 | `components/career-workbench.tsx`、`components/feedback-panel.tsx` | 登录、提问、读取流式事件、显示引用证据和最终建议、展示历史会话与问题反馈。 |
 | Web 服务层 | `app/api/chat/route.ts` | 校验请求和登录状态、管理会话、组织解析/检索/生成步骤、输出 SSE。 |
 | 本地理解层 | `lib/local-query.ts` | 不调用大模型，直接从问题中提取标准技能、城市、薪资、经验、学历、年份和咨询意图。 |
 | 证据层 | `lib/evidence.ts`、`lib/ranking.ts` | 从 Supabase 检索真实指标，计算职业、城市、下一技能和偏好说明。 |
 | 生成层 | `lib/deepseek.ts` | 使用一个受限的 DeepSeek 调用，将事实证据组织成简洁、自然的职业建议。 |
 | 可靠性层 | `lib/career-presentation.ts`、`lib/chat-stream.ts` | 生成证据预览、SSE 编解码、模型超时后的本地回答。 |
 | 数据层 | Supabase PostgreSQL + Auth | 保存业务聚合数据、用户会话和消息；提供 Email OTP 身份认证。 |
+| 通知层 | Resend + `app/api/feedback/route.ts` | 仅由服务端发送已登录用户的问题反馈，不把邮件密钥发到浏览器。 |
 
 ## 3. 离线数据流：从招聘明细到 Supabase
 
@@ -69,8 +70,8 @@ npm run import:data
 - 读取 `skills_full.csv`，建立技能主表与预测 JSON。
 - 用 `skill_aliases.csv` 建立别名到标准技能名称的映射。
 - 规范化技能名称与技能对顺序，避免同一组合重复。
-- 分别写入职业、城市、技能组合、年度/月度趋势和 AI 暴露度数据。
-- 支持按 `--section skills|aliases|relations|supplemental` 分段重跑。
+- 分别写入职业、城市、技能组合、年度/月度趋势、AI 暴露度、培养方案和职业大典明细。
+- 支持按 `--section skills|aliases|relations|curriculum|supplemental` 分段重跑。
 
 `data/` 被 `.vercelignore` 排除，因此 Vercel 线上函数不携带 CSV，也不依赖本地文件系统。
 
@@ -88,6 +89,9 @@ npm run import:data
 | `skill_yearly_trends` | `skill_yearly_trends.csv` | 年度需求、薪资和经验趋势。 | 已导入，预留给趋势图和细粒度解读。 |
 | `skill_monthly_trends` | `skill_monthly_trends.csv` | 月度趋势。 | 已导入，预留给时间序列展示。 |
 | `skill_ai_exposure` | `skill_ai_exposure.csv` | 技能在 AI 渗透职业组中的变化。 | 已导入，预留给 AI 分组解释。 |
+| `major_programs` | 高校培养方案汇总 | 学校、届别、专业、培养目标、课程与能力要求。 | 用户给出学校/专业时补充培养路径。 |
+| `major_skills` | 课程到技能映射 | 培养方案中有代表性的推断技能及依据。 | 明确区分课程覆盖和用户确认技能。 |
+| `occupation_catalog` | 职业大典映射 | 职业小类与代表性具体职业。 | 把抽象职业小类解释成可理解的具体职业。 |
 | `conversations` | 在线生成 | 用户会话元数据。 | 历史会话列表。 |
 | `messages` | 在线生成 | 用户问题、AI 回答、结构化查询和完整证据。 | 多轮回看与可追溯审计。 |
 
@@ -148,7 +152,8 @@ sequenceDiagram
 2. 并发读取技能画像、职业技能关系、目标年份城市技能预测。
 3. 仅查询包含已识别技能的 `skill_pairs` 记录，而不是每次读取完整组合表。
 4. 只有当用户技能确实构成数据库中的技能对时，才继续读取 `pair_occupation_stats`。
-5. 生成 `CareerEvidence`：技能画像、职业排序、城市排序、下一技能、已观测组合数和偏好说明。
+5. 用户给出可匹配的学校、届别或专业时，补充读取 `major_programs`、`major_skills`；职业大典明细可用时读取 `occupation_catalog`。
+6. 生成 `CareerEvidence`：技能画像、职业排序、城市排序、下一技能、已观测组合数、培养方案和偏好说明。
 
 职业排序会综合单项技能的匹配概率、职业集中度和未来需求；存在直接组合证据时才增加组合权重。城市排序按目标年份的技能需求强度计算，用户指定城市只作为软加分，不会把其他城市完全过滤掉。
 
@@ -191,7 +196,7 @@ sequenceDiagram
 - 先给职业选择结论，再解释职业、城市、趋势和下一步动作。
 - 只保留对决策有影响的少量数字，不复述 JSON、算法或表名。
 - 对没有直接观测的组合明确说明边界，不夸大组合价值。
-- 总输出目标为 700-1000 个汉字、最多六段，并以具体行动收尾。
+- 总输出目标为 700-1200 个汉字，并以具体行动收尾。
 
 ### 6.3 思考模式、可见回答与超时控制
 
@@ -203,9 +208,9 @@ thinking: { type: "enabled" }
 
 思考发生在 DeepSeek 服务端。`DeepSeekResponse` 与后续 SSE、数据库消息只读取 `choices[].message.content`，不会传输、保存或展示 `reasoning_content`。请求还设置：
 
-- `max_tokens: 2200`，为思考和 700-1000 字的可见解读保留输出预算。
+- `max_tokens: 2200`，为思考和 700-1200 字的可见解读保留输出预算。
 - `DEEPSEEK_ANSWER_TIMEOUT_MS=50000`，通过 `AbortSignal.timeout` 把模型阶段限制在 50 秒。
-- `limitCareerAnswer(answer, 1000)`，按中文句子边界截断过长回答，不截断在半句中。
+- `limitCareerAnswer(answer, 1200)`，按中文句子边界截断过长回答，不截断在半句中。
 - `DEEPSEEK_THINKING_MODE` 只允许 `enabled` 或 `disabled`，默认是 `enabled`，便于测试或成本控制时显式切换。
 
 思考模式不使用 `temperature`，因为该参数在 DeepSeek 思考模式中没有效果。DeepSeek 允许通过 `thinking.type` 显式开启或关闭，并把推理与最终 `content` 分开返回；本项目只消费后者。[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
@@ -241,7 +246,7 @@ thinking: { type: "enabled" }
 | 缩小组合查询 | 分别按 `skill_a`、`skill_b` 查询命中技能。 | 避免传输无关组合记录。 |
 | 证据先返回 | SSE `evidence` 事件。 | 用户在模型生成前即可看到系统已找到的依据。 |
 | 思考模式生成 | 一次 `thinking.enabled` 调用，只读取最终 `content`。 | 获得更完整的解释，同时不暴露推理原文。 |
-| 输出限长 | `max_tokens: 2200` + 1000 字句子边界截断。 | 控制等待时间、成本和阅读负担。 |
+| 输出限长 | `max_tokens: 2200` + 1200 字句子边界截断。 | 控制等待时间、成本和阅读负担。 |
 | 超时兜底 | 50 秒模型超时后本地回答，函数上限为 60 秒。 | 为持久化和 SSE 结束预留约 10 秒，避免无限加载。 |
 
 ### 7.3 历史基线（改动前的非思考模式）
@@ -267,6 +272,7 @@ thinking: { type: "enabled" }
 | 数据库与认证 | Supabase PostgreSQL、Auth、RLS | 聚合数据查询、Email OTP、用户级会话隔离。 |
 | 数据库 SDK | `@supabase/supabase-js`、`@supabase/ssr` | 浏览器会话、服务端 Cookie、service-role 检索。 |
 | 模型服务 | DeepSeek Chat Completions | 基于受限证据进行一次服务端思考，再只返回最终职业建议。 |
+| 反馈邮件 | Resend | 由服务端发送已登录用户的问题反馈邮件。 |
 | 流式协议 | SSE + Web Streams API | 逐阶段展示状态和证据预览。 |
 | CSV 导入 | `csv-parse` | 将离线聚合结果分批导入 Supabase。 |
 | 测试 | Vitest | 覆盖环境变量、解析、排序、导入、SSE、提示词请求与兜底生成。 |
@@ -292,6 +298,9 @@ DEEPSEEK_ANSWER_TIMEOUT_MS=50000
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+RESEND_API_KEY=
+FEEDBACK_TO_EMAIL=
+FEEDBACK_FROM_EMAIL=
 ```
 
 同时确认：
@@ -307,6 +316,6 @@ SUPABASE_SERVICE_ROLE_KEY=
 - 用 `skill_yearly_trends` 与 `skill_monthly_trends` 绘制趋势图，解释变化而不是只输出单点预测。
 - 接入 `pair_city_stats`，在有直接组合证据时增强城市排序。
 - 增加 pgvector，用于岗位描述、高校培养方案和公司财务文本的语义召回。
-- 将高校培养方案映射到技能词典，生成“课程 - 技能 - 职业”培养路径。
+- 继续扩充高校培养方案与职业大典映射的覆盖范围，生成更细的“课程 - 技能 - 职业”培养路径。
 - 将公司财务数据接入职业需求模型，观察招聘需求与企业经营指标的关联，但明确区分相关性和因果。
 - 增加运行时指标：各阶段耗时、模型兜底率、未识别技能比例和用户满意度，用于持续优化一分钟服务目标。
