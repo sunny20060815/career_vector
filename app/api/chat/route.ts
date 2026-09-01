@@ -8,7 +8,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ChatRequest, ChatResponse } from "@/types/api";
 
 export const runtime = "nodejs";
-export const maxDuration = 100;
+export const maxDuration = 60;
 
 const encoder = new TextEncoder();
 

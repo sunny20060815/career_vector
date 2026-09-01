@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+import { env, type DeepSeekThinkingMode } from "@/lib/env";
 
 interface DeepSeekResponse {
   choices?: Array<{ message?: { content?: string | null } }>;
@@ -6,18 +6,13 @@ interface DeepSeekResponse {
 
 type DeepSeekMessage = { role: "system" | "user"; content: string };
 
-export function buildDeepSeekPayload(
-  model: string,
-  messages: DeepSeekMessage[],
-  thinkingMode: "enabled" | "disabled" = "enabled"
-) {
+export function buildDeepSeekPayload(model: string, messages: DeepSeekMessage[], thinkingMode: DeepSeekThinkingMode) {
   return {
     model,
     messages,
-    max_tokens: 6000,
+    max_tokens: 2200,
     stream: false,
-    thinking: { type: thinkingMode },
-    reasoning_effort: thinkingMode === "enabled" ? "high" as const : undefined
+    thinking: { type: thinkingMode }
   };
 }
 
@@ -41,11 +36,11 @@ profiles.aiExposure 表示该技能关联职业的加权AI暴露度，不是用�
 
 【决策方法】先理解用户真正要解决的选择：职业方向、城市选择、技能补强或趋势判断。按“结论优先、依据完整、行动可执行”的顺序回答。优先使用用户输入的目标城市、期望薪资、经验和预测年份，但这些偏好只是证据解释的一部分，不能假装成硬性录用条件。
 
-【表达要求】用自然、克制的简体中文直接回答。开头先给明确建议，随后用短标题和项目符号组织关键信息。数字须注明年份和单位，不得只报排名分数。不要直接使用“NPMI”；改称“与AI技能的共现强度”，并通俗解释为“这项技能与AI技能在同一岗位要求中共同出现的紧密程度”，它反映联系而非因果。
+【表达要求】用自然、克制的简体中文直接回答。开头先给明确建议，随后用短标题和项目符号组织关键信息。数字须注明年份和单位，不得只报排名分数。不要直接使用“NPMI”；改称“与AI技能的共现强度”，并通俗解释为“这项技能与AI技能在同一岗位要求中共同出现的紧密程度”，它反映联系而非因果。不要解释系统、字段、算法、表名、JSON 或内部推理过程。
 
 【长度与格式】在完整覆盖必答信息的前提下，总长度通常控制在1200-2200个汉字。允许短标题和项目符号，不使用Markdown表格，不复述JSON或表名。证据缺失的栏目直接说明“当前证据不足”，不得静默省略。结尾给出2-3项具体、低成本、可执行的下一步。`;
 
-async function complete(model: string, messages: DeepSeekMessage[], timeoutMs: number): Promise<string> {
+async function complete(model: string, messages: DeepSeekMessage[], timeoutMs = env.deepseekAnswerTimeoutMs()): Promise<string> {
   let response: Response;
   try {
     response = await fetch("https://api.deepseek.com/chat/completions", {

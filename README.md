@@ -5,7 +5,7 @@
 ## 本地运行
 
 1. 安装 Node.js 22 LTS。
-2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY` 和 `RESEND_API_KEY` 只能保存在本地或 Vercel 服务端环境变量中。默认使用 `deepseek-v4-flash` 的深度思考模式，模型预算为 90 秒；思考过程不会返回浏览器或写入数据库。
+2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY` 和 `RESEND_API_KEY` 只能保存在本地或 Vercel 服务端环境变量中。默认的 `DEEPSEEK_ANSWER_MODEL=deepseek-v4-flash` 与 `DEEPSEEK_THINKING_MODE=enabled` 会在服务端生成更完整的建议；浏览器只会收到最终回答，不会收到推理原文。`DEEPSEEK_ANSWER_TIMEOUT_MS=50000` 会在模型超过 50 秒时转为本地证据兜底。
 3. 执行 `npm install`、`npm test`、`npm run dev`，浏览器访问 `http://localhost:3000`。
 
 ## 初始化 Supabase
@@ -19,8 +19,22 @@
 
 1. 将本目录上传到 GitHub 并在 Vercel 导入该仓库。
 2. 在 Vercel Project Settings > Environment Variables 填入 `.env.example` 的全部变量；不要提交 `.env.local`。
-3. 保持 `vercel.json` 的 100 秒问答函数时限。问答接口会先流式返回已匹配的技能、职业和城市证据，再进行一次 DeepSeek 深度思考生成；模型超过 90 秒时会自动改用本地证据生成完整建议。生产包只携带培养方案、专业技能映射、职业大典和 AI 共现四个轻量索引，用于 Supabase 可选表尚未导入时的可靠兜底。
+3. `vercel.json` 为问答函数设置 60 秒时限。问答接口会先流式返回已匹配的技能、职业和城市证据，再进行一次 DeepSeek 思考模式生成；模型超过 50 秒、网络异常或返回无效内容时，会自动改用同一批本地证据生成建议。`data/` 已被 `.vercelignore` 排除，生产请求只访问 Supabase。
 4. 将 Vercel 域名加入 Supabase Auth 的 Site URL 和 Redirect URLs，再用真实邮箱完成 OTP 登录测试。
+
+## 零基础课件
+
+按顺序阅读下列文档，可以从“项目为什么这样设计”走到“如何本地运行、部署和排查问题”：
+
+1. [00-项目是什么](docs/guide/00-项目是什么.md)
+2. [01-平台与角色](docs/guide/01-平台与角色.md)
+3. [02-数据如何变成职业建议](docs/guide/02-数据如何变成职业建议.md)
+4. [03-从零搭建前后端](docs/guide/03-从零搭建前后端.md)
+5. [04-登录、邮件与安全](docs/guide/04-登录、邮件与安全.md)
+6. [05-部署、域名与环境变量](docs/guide/05-部署、域名与环境变量.md)
+7. [06-故障排查与真实踩坑](docs/guide/06-故障排查与真实踩坑.md)
+
+更偏工程细节的说明见 [项目架构与数据流](docs/PROJECT_ARCHITECTURE.md)。
 
 ## 配置问题反馈邮件
 
@@ -32,4 +46,4 @@
 
 职业、城市和下一技能评分遵循单项证据与直接组合证据原则；没有直接组合观测时，系统不会推断工资互补效应。输入“学校+年级+专业”时，系统会结合培养目标、核心课程和专业技能映射形成专业基础路径，再将用户明确输入的技能作为个人增强路径；培养方案覆盖不等于用户已经掌握。
 
-后续可新增原始岗位明细层、pgvector 语义召回、高校培养方案、公司财务表和更细粒度的“城市-职业-薪资”联表。模型调用集中在 `lib/deepseek.ts`，检索集中在 `lib/evidence.ts`，便于独立替换。
+首版以当前聚合数据为核心，已支持可选的高校培养方案与职业大典明细证据；培养方案覆盖的能力会明确标为“推断技能”，不能当作用户已掌握。后续可新增原始岗位明细层、pgvector 语义召回、公司财务表和更细粒度的“城市-职业-薪资”联表。模型调用集中在 `lib/deepseek.ts`，检索集中在 `lib/evidence.ts`，便于独立替换。
