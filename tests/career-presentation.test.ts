@@ -21,7 +21,7 @@ const evidence: CareerEvidence = {
   preferenceNotes: ["已将理想城市 上海 作为城市排序加分项。"],
   confirmedSkills: ["Python"],
   inferredSkills: ["药学"],
-  curriculum: { school: "首都经济贸易大学", cohort: "2024级", major: "经济学", training_objectives: "培养复合型经济人才", core_courses: "微观经济学" },
+  curriculum: { school: "首都经济贸易大学", cohort: "2024级", major: "经济学", training_objectives: "培养复合型经济人才", core_courses: "微观经济学、宏观经济学、统计学、计量经济学、经济预测" },
   occupationDetails: [{ subclassCode: "202", subclassName: "工程技术人员", occupations: [{ name: "软件工程技术人员", description: "开发软件系统" }] }]
 };
 
@@ -41,10 +41,14 @@ describe("career presentation", () => {
     expect(answer).toContain("**建议**");
     expect(answer).toContain("优先考虑数字技术工程技术人员");
     expect(answer).toContain("经济学+Python");
-    expect(answer).toContain("课程覆盖不能视为你已经掌握");
+    expect(answer).toContain("专业理论（微观经济学、宏观经济学）");
+    expect(answer).toContain("定量与工具训练（统计学、计量经济学、经济预测）");
     expect(answer).toContain("与AI技能的共现强度");
+    expect(answer).toContain("AI时代下");
+    expect(answer).toContain("因果识别");
     expect(answer).toContain("可优先比较上海");
     expect(answer).toContain("Linux");
+    expect(answer).not.toContain("收集约20条招聘信息");
     expect(answer).not.toContain("培养复合型经济人才");
     expect(answer).not.toContain("培养方案基础");
     expect(answer).not.toContain("技能市场画像");
@@ -75,5 +79,6 @@ describe("career presentation", () => {
     expect(answer).toContain("没有足够直接组合证据");
     expect(answer).not.toContain("0.000");
     expect(answer).not.toContain("无效建议");
+    expect(answer).toContain("可进一步向系统指定目标职业或城市");
   });
 });
