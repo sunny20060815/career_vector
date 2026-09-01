@@ -48,8 +48,11 @@ export async function POST(request: Request) {
           if (conversationId) {
             const { data: conversation, error } = await supabase.from("conversations").select("id").eq("id", conversationId).single();
             if (error || !conversation) throw new Error("会话不存在或无权访问");
-            const { data: previousMessage } = await supabase.from("messages").select("structured_query").eq("conversation_id", conversationId).eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle();
-            previousQuery = (previousMessage?.structured_query as ParsedCareerQuery | null) ?? null;
+            const { data: previousMessages } = await supabase.from("messages").select("structured_query").eq("conversation_id", conversationId).eq("role", "assistant").order("created_at", { ascending: false }).limit(20);
+            previousQuery = (previousMessages ?? []).reverse().reduce<ParsedCareerQuery | null>((context, message) => {
+              const parsed = message.structured_query as ParsedCareerQuery | null;
+              return parsed ? mergeCareerQueryContext(parsed, context) : context;
+            }, null);
           } else {
             const { data: conversation, error } = await supabase.from("conversations").insert({ user_id: userId, title: titleFor(question) }).select("id").single();
             if (error || !conversation) throw new Error("无法创建会话");
