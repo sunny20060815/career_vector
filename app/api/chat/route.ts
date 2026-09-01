@@ -81,7 +81,7 @@ export async function POST(request: Request) {
               message: error instanceof Error ? error.message : String(error)
             });
             emit({ type: "status", payload: { stage: "fallback", message: "生成服务较慢，正在依据现有信息整理建议..." } });
-            answer = noData ? formatNoDataCareerAnswer(question) : formatFallbackCareerAnswer(evidence);
+            answer = noData ? formatNoDataCareerAnswer(question) : formatFallbackCareerAnswer(evidence, question);
             suggestedQuestions = buildSuggestedQuestions(evidence);
           }
           const { error: assistantMessageError } = await supabase.from("messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", content: answer, structured_query: query, evidence });

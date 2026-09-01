@@ -94,4 +94,14 @@ describe("career presentation", () => {
     expect(formatNoDataCareerAnswer("我应该怎样描述自己的专业和技能？")).toContain("学校与年级+专业+已经掌握的技能");
     expect(formatNoDataCareerAnswer("培养方案里哪些课程更重要？")).toContain("学校、年级和专业");
   });
+
+  it("creates a curriculum-based learning path when the model is unavailable", () => {
+    const answer = formatFallbackCareerAnswer(evidence, "请结合培养方案给我一份课程学习建议");
+
+    expect(answer).toContain("**课程学习建议**");
+    expect(answer).toContain("专业理论—定量工具—综合应用");
+    expect(answer).toContain("统计学、计量经济学、经济预测");
+    expect(answer).toContain("课程外补充");
+    expect(answer).toContain("AI辅助方式");
+  });
 });

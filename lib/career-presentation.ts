@@ -126,8 +126,29 @@ function pairSentence(pair: CareerEvidence["observedPairs"][number]): string {
   return `${pair.skillA}与${pair.skillB}已有直接组合记录，但现有证据不足以判断工资互补。`;
 }
 
-export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
+function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Record<string, unknown>): string {
+  const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((course) => course.trim()).filter(Boolean);
+  const quantitative = courses.filter((course) => /统计|计量|数学|预测|数据|编程|模型|算法|机器学习|人工智能/.test(course)).slice(0, 4);
+  const theory = courses.filter((course) => !quantitative.includes(course)).slice(0, 4);
+  const occupation = evidence.occupations[0]?.name || "目标职业";
+  const nextSkill = evidence.nextSkills.find((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01)?.skill;
+  return [
+    "**课程学习建议**",
+    `建议围绕${occupation}建立“专业理论—定量工具—综合应用”的学习主线。培养方案中的课程覆盖只能说明学校提供了训练基础，最终仍需要通过项目成果证明你能够独立应用。`,
+    "**学习顺序**",
+    `1. 先吃透${theory.slice(0, 3).join("、") || "专业基础课程"}，重点训练问题定义、理论解释和专业判断。`,
+    `2. 再强化${quantitative.join("、") || "定量与工具课程"}，把公式和方法转化为可复现的数据分析过程。`,
+    `3. 最后完成一个面向${occupation}的综合项目，形成“问题提出—数据处理—分析验证—结果解释”的完整作品。`,
+    "**课程外补充**",
+    nextSkill ? `${nextSkill}与现有能力存在直接共现证据，可作为优先验证的补充技能。` : "现有证据不足以确定唯一的下一技能，建议先围绕目标职业完成课程项目，再根据项目中的真实缺口补充工具。",
+    "**AI辅助方式**",
+    "可以使用AI辅助资料梳理、代码解释、调试和初步结果检查，但问题设定、数据质量判断、方法选择与结果解释应由你自己完成，并在作品集中明确人工核验过程。"
+  ].join("\n\n");
+}
+
+export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = ""): string {
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
+  if (curriculum && /课程学习|学习建议|学习规划|课程.*怎么|课程.*如何/.test(question)) return formatCurriculumLearningAnswer(evidence, curriculum);
   const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;
   const confirmedSet = new Set(confirmedSkills);
   const inferredSkills = (evidence.inferredSkills ?? []).filter((skill) => !confirmedSet.has(skill));
