@@ -68,7 +68,10 @@ export async function POST(request: Request) {
             emit({ type: "status", payload: { stage: "writing", message: "已找到可引用的职业证据，正在整理成建议..." } });
             try {
               answer = await writeCareerAnswer(question, evidence);
-            } catch {
+            } catch (error) {
+              console.error("DeepSeek career answer failed; using evidence fallback", {
+                message: error instanceof Error ? error.message : String(error)
+              });
               emit({ type: "status", payload: { stage: "fallback", message: "生成服务较慢，已依据同一批证据整理建议..." } });
               answer = formatFallbackCareerAnswer(evidence);
             }

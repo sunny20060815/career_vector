@@ -33,60 +33,143 @@ function numberValue(row: Record<string, unknown>, key: string): number | null {
   return value !== null && value !== undefined && Number.isFinite(parsed) ? parsed : null;
 }
 
-function fixed(value: number | null, digits = 1): string {
-  return value === null ? "暂无" : value.toFixed(digits);
+function profileName(profile: Record<string, unknown>): string {
+  return String(profile.displayName || profile.skill || "相关技能");
 }
 
-function share(value: number | null): string {
-  return value === null ? "暂无" : `${(value * 100).toFixed(1)}%`;
+function profileSentence(profile: Record<string, unknown>, forecastYear: number): string {
+  const forecast = typeof profile.forecast === "object" && profile.forecast !== null
+    ? profile.forecast as Record<string, unknown>
+    : {};
+  const facts: string[] = [];
+  const salary = numberValue(profile, "salaryMedian2025");
+  const demand = numberValue(profile, "demandPer10k2025");
+  const trend = typeof forecast.trend === "string" ? forecast.trend.trim() : "";
+  if (salary !== null && salary > 0) facts.push(`当前月薪中位数约${Math.round(salary)}元`);
+  if (demand !== null && demand > 0) facts.push(`2025年需求强度约${demand.toFixed(1)}个/万岗位`);
+  if (trend) facts.push(`${forecastYear}年预测趋势为${trend}`);
+  return `${profileName(profile)}：${facts.join("，") || "现有指标不足以支持进一步判断"}。`;
 }
 
-function pairLine(pair: CareerEvidence["observedPairs"][number]): string {
-  const wage = pair.wageComplementPct === null ? "暂无" : `${pair.wageComplementPct.toFixed(1)}%`;
-  const rate2025 = pair.demandRate2025 === null ? "暂无" : `${(pair.demandRate2025 * 100).toFixed(2)}%`;
-  const rate2028 = pair.demandRate2028 === null ? "暂无" : `${(pair.demandRate2028 * 100).toFixed(2)}%`;
-  const growth = pair.demandGrowthPct === null ? "暂无" : `${pair.demandGrowthPct.toFixed(1)}%`;
-  return `- ${pair.skillA}+${pair.skillB}：共现强度${fixed(pair.cooccurrence, 3)}，2025年组合需求率${rate2025}，2028年预测${rate2028}，需求增长${growth}，工资互补效应${wage}，证据等级${pair.evidenceLevel || "暂无"}。`;
+function isMeaningfulPair(pair: CareerEvidence["observedPairs"][number]): boolean {
+  const hasEvidenceLevel = Boolean(pair.evidenceLevel && !["暂无", "无"].includes(pair.evidenceLevel.trim()));
+  const significantWage = pair.wageComplementPValue !== null
+    && pair.wageComplementPValue <= 0.05
+    && pair.wageComplementPct !== null
+    && Math.abs(pair.wageComplementPct) >= 0.1;
+  return significantWage
+    || hasEvidenceLevel
+    || (pair.cooccurrence !== null && Math.abs(pair.cooccurrence) >= 0.01)
+    || (pair.demandRate2025 !== null && pair.demandRate2025 > 0)
+    || (pair.demandRate2028 !== null && pair.demandRate2028 > 0);
+}
+
+function pairSentence(pair: CareerEvidence["observedPairs"][number]): string {
+  if (pair.wageComplementPValue !== null && pair.wageComplementPValue <= 0.05 && pair.wageComplementPct !== null) {
+    return `${pair.skillA}与${pair.skillB}存在直接观测到的工资互补证据，互补效应约${pair.wageComplementPct.toFixed(1)}%。`;
+  }
+  if (pair.cooccurrence !== null && Math.abs(pair.cooccurrence) >= 0.01) {
+    return `${pair.skillA}与${pair.skillB}存在直接共现证据，共现强度为${pair.cooccurrence.toFixed(3)}；这表示两项技能更常共同进入岗位要求，不等同于工资溢价。`;
+  }
+  return `${pair.skillA}与${pair.skillB}已有直接组合记录，但现有证据不足以判断工资互补。`;
 }
 
 export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
-  const skillLines = evidence.profiles.slice(0, 6).map((profile) => {
-    const forecast = typeof profile.forecast === "object" && profile.forecast !== null ? profile.forecast as Record<string, unknown> : {};
-    const name = String(profile.displayName || profile.skill || "相关技能");
-    return `- ${name}：2025年需求率${share(numberValue(profile, "demandRate2025"))}、需求强度${fixed(numberValue(profile, "demandPer10k2025"))}个/万岗位，月薪中位数${fixed(numberValue(profile, "salaryMedian2025"), 0)}元，最低经验${fixed(numberValue(profile, "experienceMean2025"))}年，本科及以上占比${share(numberValue(profile, "bachelorOrAboveShare2025"))}、研究生占比${share(numberValue(profile, "graduateShare2025"))}；${evidence.forecastYear}年预测需求率${share(numberValue(forecast, "demandRatio"))}、需求强度${fixed(numberValue(forecast, "demandPer10k"))}个/万岗位、月薪${fixed(numberValue(forecast, "salaryMedian"), 0)}元，趋势为${String(forecast.trend || "暂无判断")}；关联职业AI暴露度${fixed(numberValue(profile, "aiExposure"))}，与AI技能的共现强度${fixed(numberValue(profile, "aiCooccurrence"), 3)}，历史AI协同占比${share(numberValue(profile, "aiCooccurrenceShare"))}。`;
-  });
-  const occupationLines = evidence.occupations.slice(0, 5).map((item, index) => `${index + 1}. ${item.name}（匹配技能：${item.matchedSkills.join("、") || "暂无"}）`);
-  const detailLines = (evidence.occupationDetails ?? []).slice(0, 5).map((item) => `${item.subclassName}包含${item.occupations.slice(0, 5).map((occupation) => occupation.name).join("、")}`);
-  const pairLines = evidence.observedPairs.length
-    ? evidence.observedPairs.slice(0, 6).map(pairLine)
-    : ["- 当前没有直接观测到完整技能组合，因此不推断组合工资互补效应和组合需求前景。"];
-  const cityLines = evidence.cities.slice(0, 5).map((item, index) => `${index + 1}. ${item.city}（匹配技能：${item.matchedSkills.join("、")}）`);
-  const nextLines = evidence.nextSkills.slice(0, 5).map((item) => `- ${item.skill}：与现有的${item.relatedTo}联系较紧密，共现强度${fixed(item.cooccurrence, 3)}。`);
-  const aiDetailLines = evidence.aiExposureDetails.slice(0, 6).map((item) => `- ${item.skill}在${item.aiGroup || "相关"}职业组中的技能需求占比：2025年${share(item.demandShare2025)}，${evidence.forecastYear}年预测${share(item.demandShare2028)}。`);
-  const curriculumSection = curriculum ? [
-    "**培养方案基础**",
-    `${String(curriculum.school || "")}${String(curriculum.cohort || "")}${String(curriculum.major || "")}；培养目标：${String(curriculum.training_objectives || "暂无")}；核心课程：${String(curriculum.core_courses || "暂无")}。`,
-    `专业基础路径：培养方案推断能力包括${(evidence.inferredSkills ?? []).join("、") || "暂无"}，这些是课程和培养要求覆盖的能力，不等于你已经掌握。`,
-    `个人增强路径：你明确输入的技能为${(evidence.confirmedSkills ?? []).join("、") || "暂无"}；系统已将其与专业基础能力合并后重新计算职业、城市和下一技能建议。`
-  ] : [];
+  const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;
+  const confirmedSet = new Set(confirmedSkills);
+  const inferredSkills = (evidence.inferredSkills ?? []).filter((skill) => !confirmedSet.has(skill));
+
+  const rankedOccupations = evidence.occupations
+    .map((item, index) => ({
+      item,
+      index,
+      confirmedMatches: item.matchedSkills.filter((skill) => confirmedSet.has(skill))
+    }))
+    .sort((left, right) => right.confirmedMatches.length - left.confirmedMatches.length
+      || right.item.score - left.item.score
+      || left.index - right.index);
+  const directMatches = confirmedSkills.length
+    ? rankedOccupations.filter((item) => item.confirmedMatches.length > 0)
+    : rankedOccupations;
+  const occupations = (directMatches.length ? directMatches : rankedOccupations).slice(0, 2);
+
+  let decision = "现有证据不足以给出可靠的职业方向，建议先补充自己实际使用过的工具、专业知识或项目经历。";
+  if (occupations.length === 1) {
+    decision = `如果以就业为目标，我会优先考虑${occupations[0].item.name}。`;
+  } else if (occupations.length >= 2) {
+    decision = `如果以就业为目标，我会优先考虑${occupations[0].item.name}，其次是${occupations[1].item.name}。`;
+  }
+
+  const profileBySkill = new Map<string, Record<string, unknown>>();
+  for (const profile of evidence.profiles) {
+    profileBySkill.set(profileName(profile), profile);
+    if (profile.skill) profileBySkill.set(String(profile.skill), profile);
+  }
+  const selectedProfiles = confirmedSkills
+    .map((skill) => profileBySkill.get(skill))
+    .filter((profile): profile is Record<string, unknown> => Boolean(profile))
+    .slice(0, 2);
+  if (!selectedProfiles.length && evidence.profiles[0]) selectedProfiles.push(evidence.profiles[0]);
+
+  const reasonLines: string[] = [];
+  if (confirmedSkills.length) {
+    const major = curriculum ? String(curriculum.major || "").trim() : "";
+    reasonLines.push(`你当前最可信的优势是${major ? `“${major}+${confirmedSkills.slice(0, 3).join("+")}”` : confirmedSkills.slice(0, 3).join("、")}，职业排序主要依据这些明确输入的技能。`);
+  }
+  if (curriculum && inferredSkills.length) {
+    reasonLines.push(`培养方案可能覆盖${inferredSkills.slice(0, 3).join("、")}等基础，但课程覆盖不能视为你已经掌握，建议通过项目或实习进一步验证。`);
+  }
+  for (const occupation of occupations.slice(0, 2)) {
+    const matches = occupation.confirmedMatches.length ? occupation.confirmedMatches : occupation.item.matchedSkills.slice(0, 2);
+    const detail = evidence.occupationDetails?.find((item) => item.subclassCode === occupation.item.code || item.subclassName === occupation.item.name);
+    const examples = detail?.occupations.slice(0, 2).map((item) => item.name).join("、");
+    reasonLines.push(`${occupation.item.name}与${matches.join("、") || "现有能力基础"}直接匹配${examples ? `，可重点了解${examples}等具体岗位` : ""}。`);
+  }
+  reasonLines.push(...selectedProfiles.map((profile) => profileSentence(profile, evidence.forecastYear)));
+
+  const aiProfile = selectedProfiles
+    .map((profile) => ({ profile, value: numberValue(profile, "aiCooccurrence") }))
+    .filter((item): item is { profile: Record<string, unknown>; value: number } => item.value !== null && Math.abs(item.value) >= 0.01)
+    .sort((left, right) => Math.abs(right.value) - Math.abs(left.value))[0];
+  if (aiProfile) {
+    reasonLines.push(`${profileName(aiProfile.profile)}与AI技能的共现强度为${aiProfile.value.toFixed(3)}，表示两者在同一岗位要求中联系较紧密，但不代表因果关系或工资溢价。`);
+  }
+
+  const meaningfulPair = evidence.observedPairs
+    .filter((pair) => confirmedSet.has(pair.skillA) && confirmedSet.has(pair.skillB))
+    .find(isMeaningfulPair);
+  if (meaningfulPair) {
+    reasonLines.push(pairSentence(meaningfulPair));
+  } else if (confirmedSkills.length > 1) {
+    reasonLines.push("目前没有足够直接组合证据支持判断这些技能的工资互补，更适合分别评价核心技能。");
+  }
+
+  const preferredCities = evidence.cities.filter((city) => city.preferred).slice(0, 3);
+  if (preferredCities.length) {
+    reasonLines.push(`地域上可优先比较${preferredCities.map((city) => city.city).join("、")}，这些城市与当前技能和已表达偏好更匹配。`);
+  }
+
+  const usefulNextSkills = evidence.nextSkills
+    .filter((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01 && confirmedSet.has(item.relatedTo))
+    .slice(0, 2);
+  const primaryOccupation = occupations[0]?.item.name || "目标岗位";
+  const actions = [
+    `围绕${occupations.map((item) => item.item.name).join("、") || "目标方向"}各收集约20条招聘信息，比较重复出现的职责和技能缺口。`,
+    usefulNextSkills.length
+      ? usefulNextSkills.length === 1
+        ? `优先验证${usefulNextSkills[0].skill}：它与现有的${usefulNextSkills[0].relatedTo}存在直接共现证据。`
+        : `优先验证${usefulNextSkills.map((item) => item.skill).join("或")}：它们分别与现有的${usefulNextSkills.map((item) => item.relatedTo).join("、")}存在直接共现证据。`
+      : "先确定一个目标职业，再从真实岗位中选择出现频率较高的缺口技能，不依据零值共现结果盲目补课。",
+    `用一个课程项目、实习或作品集证明${confirmedSkills.slice(0, 2).join("和") || "核心能力"}能够完成${primaryOccupation}中的实际任务。`
+  ];
+
   return [
-    `建议优先围绕${evidence.occupations.slice(0, 3).map((item) => item.name).join("、") || "现有技能相关岗位"}规划求职，并重点补齐能形成直接组合证据的技能。`,
-    ...curriculumSection,
-    "**技能市场画像**",
-    ...(skillLines.length ? skillLines : ["当前没有足够的技能市场画像。"]),
-    "与AI技能的共现强度表示该技能与AI技能在同一岗位要求中共同出现的紧密程度，反映联系而非因果，也不代表薪资溢价。",
-    ...(aiDetailLines.length ? ["**AI 渗透率补充**", ...aiDetailLines] : []),
-    "**职业匹配**",
-    ...(occupationLines.length ? occupationLines : ["当前职业证据不足。"]),
-    ...detailLines,
-    "**已观测技能组合**",
-    ...pairLines,
-    `**${evidence.forecastYear}年城市建议**`,
-    evidence.cities.length ? `可优先关注${evidence.cities.slice(0, 5).map((item) => item.city).join("、")}。` : "当前城市证据不足。",
-    ...(cityLines.length ? cityLines : ["当前城市证据不足。"]),
-    "**下一项技能与行动**",
-    ...(nextLines.length ? nextLines : ["先围绕现有技能完成一个可展示项目并积累岗位经验。"]),
-    "接下来可先选定一个目标职业，补充一项推荐技能，并用课程项目、实习或作品集形成可验证证据。"
+    "**建议**",
+    decision,
+    "**为什么**",
+    ...reasonLines,
+    "**下一步**",
+    ...actions.map((action, index) => `${index + 1}. ${action}`)
   ].join("\n\n");
 }
