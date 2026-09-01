@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
   "functions": {
-    "app/api/chat/route.ts": { "maxDuration": 30 }
+    "app/api/chat/route.ts": { "maxDuration": 60 }
   }
 }
