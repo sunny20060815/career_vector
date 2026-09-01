@@ -306,7 +306,7 @@ export function SkillGlobe() {
       </div>
       <div ref={canvasHostRef} className="absolute inset-0" />
       <div className="globe-copy pointer-events-none absolute inset-x-4 bottom-3 z-10 flex items-end justify-between gap-3 sm:inset-x-5 sm:bottom-4">
-        <div><p className="text-[10px] tracking-[0.1em] text-[#c5dcf1]">830项标准化技能 · 22个技能簇</p><p className="mt-1 text-[9px] text-[#6585a6]">每个光点代表一项技能</p></div>
+        <div><p className="text-[10px] tracking-[0.1em] text-[#c5dcf1]">830项标准化技能 · 22个技能簇</p><p className="mt-1 text-[9px] text-[#6585a6]">每个光点代表一项技能或专业知识</p></div>
         <p className="max-w-32 text-right text-[9px] leading-4 text-[#6585a6]">浅蓝连线表示技能共现关系</p>
       </div>
     </section>
