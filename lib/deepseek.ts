@@ -5,6 +5,7 @@ interface DeepSeekResponse {
 }
 
 export type DeepSeekMessage = { role: "system" | "user"; content: string };
+export interface CareerAdvisorOutput { answer: string; suggestedQuestions: string[] }
 
 export function buildDeepSeekPayload(model: string, messages: DeepSeekMessage[], thinkingMode: DeepSeekThinkingMode) {
   return {
@@ -441,7 +442,38 @@ AI 暴露较高不等于职业会被替代。若暴露度和需求证据同时�
 11. 有有效 AI 证据时，是否解释了任务层影响并提出与专业和目标职业相关的 AI 时代策略。
 
 如果答案看起来更像“系统把查到的数据念给用户听”，重新组织后再输出。
+
+
+【十六、候选追问输出】
+
+在正文结束后，必须追加下面的机器可读区块：
+
+<suggested_questions>["问题1","问题2","问题3"]</suggested_questions>
+
+三个问题应当是用户读完本轮建议后最可能继续追问、且系统能够依据现有职业、技能、培养方案、城市或AI证据继续回答的问题。每个问题必须完整、简短、互不重复，不要在正文中提前列出，也不要在标签外解释该区块。
 `;
+
+export function parseCareerAdvisorOutput(content: string): CareerAdvisorOutput {
+  const match = content.match(/<suggested_questions>([\s\S]*?)<\/suggested_questions>/i);
+  let suggestedQuestions: string[] = [];
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[1].replace(/```(?:json)?|```/gi, "").trim()) as unknown;
+      if (Array.isArray(parsed)) {
+        suggestedQuestions = parsed
+          .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          .map((item) => item.trim().slice(0, 80))
+          .slice(0, 3);
+      }
+    } catch {
+      suggestedQuestions = [];
+    }
+  }
+  return {
+    answer: content.replace(/\s*<suggested_questions>[\s\S]*?<\/suggested_questions>\s*/gi, "").trim(),
+    suggestedQuestions
+  };
+}
 
 async function complete(model: string, messages: DeepSeekMessage[], timeoutMs = env.deepseekAnswerTimeoutMs()): Promise<string> {
   let response: Response;
@@ -482,7 +514,8 @@ export function buildCareerAdvisorMessages(question: string, evidence: object): 
   ];
 }
 
-export async function writeCareerAnswer(question: string, evidence: object): Promise<string> {
-  const answer = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence));
-  return limitCareerAnswer(answer);
+export async function writeCareerAnswer(question: string, evidence: object): Promise<CareerAdvisorOutput> {
+  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence));
+  const output = parseCareerAdvisorOutput(content);
+  return { ...output, answer: limitCareerAnswer(output.answer) };
 }

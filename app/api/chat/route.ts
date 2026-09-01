@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { buildEvidencePreview, formatFallbackCareerAnswer } from "@/lib/career-presentation";
+import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer } from "@/lib/career-presentation";
 import { encodeChatStreamEvent } from "@/lib/chat-stream";
 import { writeCareerAnswer } from "@/lib/deepseek";
 import { parseCareerQuestionFromCatalog, retrieveCareerEvidence } from "@/lib/evidence";
@@ -62,24 +62,29 @@ export async function POST(request: Request) {
 
           const noData = evidence.recognizedSkills.length === 0;
           let answer: string;
+          let suggestedQuestions: string[] = [];
           if (noData) {
             answer = "暂无相关记录。系统尚未在已入库的技能词典中识别出你的核心技能，请尝试写出更具体的工具、专业知识或岗位名称。";
+            suggestedQuestions = ["我应该怎样描述自己的专业和技能？", "只输入专业也能进行职业匹配吗？", "可以根据目标职业反推需要学习的技能吗？"];
           } else {
             emit({ type: "status", payload: { stage: "writing", message: "已找到可引用的职业证据，正在整理成建议..." } });
             try {
-              answer = await writeCareerAnswer(question, evidence);
+              const generated = await writeCareerAnswer(question, evidence);
+              answer = generated.answer;
+              suggestedQuestions = generated.suggestedQuestions.length ? generated.suggestedQuestions : buildSuggestedQuestions(evidence);
             } catch (error) {
               console.error("DeepSeek career answer failed; using evidence fallback", {
                 message: error instanceof Error ? error.message : String(error)
               });
               emit({ type: "status", payload: { stage: "fallback", message: "生成服务较慢，已依据同一批证据整理建议..." } });
               answer = formatFallbackCareerAnswer(evidence);
+              suggestedQuestions = buildSuggestedQuestions(evidence);
             }
           }
           const { error: assistantMessageError } = await supabase.from("messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", content: answer, structured_query: query, evidence });
           if (assistantMessageError) throw new Error("无法保存回答");
           await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
-          const response: ChatResponse = { conversationId, answer, query, evidence, noData };
+          const response: ChatResponse = { conversationId, answer, suggestedQuestions, query, evidence, noData };
           emit({ type: "complete", payload: response as unknown as Record<string, unknown> });
         } catch (error) {
           const message = error instanceof Error ? error.message : "服务暂时不可用";

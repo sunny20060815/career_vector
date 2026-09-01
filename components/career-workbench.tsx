@@ -9,13 +9,13 @@ import { FeedbackPanel } from "@/components/feedback-panel";
 import { formatOtpSendError } from "@/lib/auth-error";
 import { getEmailRedirectUrl } from "@/lib/auth-redirect";
 import { getSessionEmail } from "@/lib/auth-session";
-import { buildEvidencePreview, type EvidencePreview } from "@/lib/career-presentation";
+import { buildEvidencePreview, buildSuggestedQuestions, type EvidencePreview } from "@/lib/career-presentation";
 import { decodeChatStream } from "@/lib/chat-stream";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import type { ChatEvidenceEvent, ChatProgress, ChatResponse } from "@/types/api";
 
 interface Conversation { id: string; title: string; updated_at: string }
-interface UiMessage { id: string; role: "user" | "assistant"; content: string; evidence?: ChatResponse["evidence"] }
+interface UiMessage { id: string; role: "user" | "assistant"; content: string; evidence?: ChatResponse["evidence"]; suggestedQuestions?: string[] }
 
 const examples = [
   { icon: BrainCircuit, title: "专业供需匹配", text: "我是首经贸2024级经济学（实验班）专业的学生，我会 Python、Stata 和 R语言", note: "培养方案 · 职业路径" },
@@ -42,6 +42,7 @@ export function CareerWorkbench() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const introRef = useRef<HTMLDivElement>(null);
@@ -101,7 +102,10 @@ export function CareerWorkbench() {
     if (!response.ok) return;
     const payload = (await response.json()) as { messages: Array<UiMessage & { evidence?: ChatResponse["evidence"] }> };
     setConversationId(id);
-    setMessages(payload.messages);
+    setMessages(payload.messages.map((message) => ({
+      ...message,
+      suggestedQuestions: message.role === "assistant" && message.evidence ? buildSuggestedQuestions(message.evidence) : undefined
+    })));
     setError("");
     setActiveView("planner");
   }
@@ -124,11 +128,10 @@ export function CareerWorkbench() {
     setConversationId(undefined);
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!question.trim() || loading) return;
+  async function sendQuestion(rawQuestion: string) {
+    const submitted = rawQuestion.trim();
+    if (!submitted || loading) return;
     if (!userEmail) return setError("请先登录后再提交职业咨询。");
-    const submitted = question.trim();
     setLoading(true);
     setProgress({ stage: "understanding", message: "正在识别技能与求职偏好..." });
     setPreview(null);
@@ -156,7 +159,7 @@ export function CareerWorkbench() {
           else if (streamEvent.type === "complete") {
             const payload = streamEvent.payload as unknown as ChatResponse;
             setConversationId(payload.conversationId);
-            setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", content: payload.answer, evidence: payload.evidence }]);
+            setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", content: payload.answer, evidence: payload.evidence, suggestedQuestions: payload.suggestedQuestions }]);
             await loadConversations();
             completed = true;
           } else if (streamEvent.type === "error") throw new Error(streamEvent.payload.message);
@@ -173,6 +176,13 @@ export function CareerWorkbench() {
     }
   }
 
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await sendQuestion(question);
+  }
+
+  const visibleConversations = historyExpanded ? conversations : conversations.slice(0, 7);
+
   return (
     <main className="app-shell h-[100dvh] min-h-0 overflow-hidden bg-[#060b0c] text-[#e8f1ed]">
       <div className="grid h-full grid-cols-1 md:grid-cols-[248px_minmax(0,1fr)]">
@@ -180,9 +190,12 @@ export function CareerWorkbench() {
           <div className="border-b border-[#19302e] px-5 py-5"><Brand /></div>
           <div className="px-4 pt-4"><button onClick={() => { setActiveView("planner"); setConversationId(undefined); setMessages([]); }} className="flex h-10 w-full items-center justify-center gap-2 border border-[#2b514b] bg-[#0d1b19] text-sm text-[#c7d9d3] transition hover:border-[#42cdb0] hover:text-white" type="button"><Plus size={15} />新建规划</button></div>
           <div className="mt-6 flex items-center gap-2 px-5 text-[11px] font-medium tracking-[0.12em] text-[#66817b]"><Clock3 size={13} />历史咨询</div>
-          <div className="mt-2 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3">
-            {conversations.map((item) => <button key={item.id} onClick={() => void chooseConversation(item.id)} className={`truncate border-l px-3 py-2.5 text-left text-sm transition ${item.id === conversationId ? "border-[#4eddbd] bg-[#112621] text-white" : "border-transparent text-[#7f9992] hover:bg-[#0d1b19] hover:text-[#d8e7e2]"}`} type="button">{item.title}</button>)}
-            {!conversations.length && <p className="px-3 py-3 text-xs leading-5 text-[#506963]">新的职业规划将在这里留存。</p>}
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+            <div className="flex flex-col gap-1">
+              {visibleConversations.map((item) => <button key={item.id} title={item.title} onClick={() => void chooseConversation(item.id)} className={`group flex h-11 min-w-0 items-center gap-2 border-l px-3 text-left text-sm transition ${item.id === conversationId ? "border-[#4eddbd] bg-[#112621] text-white" : "border-transparent text-[#7f9992] hover:bg-[#0d1b19] hover:text-[#d8e7e2]"}`} type="button"><MessageSquareText size={13} className="shrink-0 opacity-60" /><span className="truncate">{item.title}</span></button>)}
+              {!conversations.length && <p className="px-3 py-3 text-xs leading-5 text-[#506963]">新的职业规划将在这里留存。</p>}
+              {conversations.length > 7 && <button onClick={() => setHistoryExpanded((value) => !value)} className="mt-2 flex h-9 items-center justify-center gap-1 border border-[#1b3531] text-xs text-[#6f8b84] transition hover:border-[#315c54] hover:text-[#b9ccc6]" type="button">{historyExpanded ? "收起历史记录" : `展开其余 ${conversations.length - 7} 条`}<ChevronRight size={13} className={`transition ${historyExpanded ? "-rotate-90" : "rotate-90"}`} /></button>}
+            </div>
           </div>
           <div className="border-t border-[#19302e] p-4"><div className="flex items-center gap-2 text-xs text-[#79938c]"><CircleCheck size={14} className="text-[#42cdb0]" /><span className="truncate">{userEmail ?? "等待登录"}</span></div>{userEmail && <button onClick={() => void signOut()} className="mt-3 flex items-center gap-2 text-xs text-[#b98573] transition hover:text-[#ef9b7e]" type="button"><LogOut size={13} />退出登录</button>}</div>
         </aside>
@@ -199,7 +212,7 @@ export function CareerWorkbench() {
 
           {activeView === "planner" ? <>
             <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-48 pt-6 md:px-8 md:pb-52 lg:px-12">
-              {!messages.length && !loading ? <Intro containerRef={introRef} onExample={(value) => { setQuestion(value); requestAnimationFrame(resizeTextarea); }} /> : <div className="mx-auto max-w-5xl space-y-7">{messages.map((message) => <MessageBlock key={message.id} message={message} />)}{loading && <ThinkingIndicator progress={progress} preview={preview} />}</div>}
+              {!messages.length && !loading ? <Intro containerRef={introRef} onExample={(value) => { setQuestion(value); requestAnimationFrame(resizeTextarea); }} /> : <div className="mx-auto max-w-5xl space-y-7">{messages.map((message, index) => <MessageBlock key={message.id} message={message} showSuggestions={!loading && index === messages.length - 1} onSuggestedQuestion={(value) => void sendQuestion(value)} />)}{loading && <ThinkingIndicator progress={progress} preview={preview} />}</div>}
             </div>
 
             <div className="composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-[#19302e] bg-[#08100f]/95 px-3 pb-3 pt-3 md:px-8 md:pb-6 lg:px-12">
@@ -253,7 +266,7 @@ function LoginMatrix() {
   return <div className="login-unit login-matrix absolute inset-x-8 bottom-8 h-40 border border-[#18342f]" aria-hidden="true"><span className="absolute left-3 top-3 text-[9px] tracking-[0.16em] text-[#4b6b64]">MATCHING SIGNAL</span>{[18, 36, 54, 72, 86].map((left, index) => <i key={left} className="login-node" style={{ left: `${left}%`, top: `${[66, 32, 52, 25, 70][index]}%` }} />)}<i className="login-beam beam-a" /><i className="login-beam beam-b" /><i className="login-beam beam-c" /><i className="login-scan" /></div>;
 }
 
-function MessageBlock({ message }: { message: UiMessage }) {
+function MessageBlock({ message, showSuggestions, onSuggestedQuestion }: { message: UiMessage; showSuggestions: boolean; onSuggestedQuestion: (value: string) => void }) {
   const ref = useRef<HTMLDivElement | HTMLElement>(null);
   useLayoutEffect(() => {
     if (!ref.current) return;
@@ -262,7 +275,7 @@ function MessageBlock({ message }: { message: UiMessage }) {
     return () => mm.revert();
   }, []);
   if (message.role === "user") return <div ref={ref as React.RefObject<HTMLDivElement>} className="ml-auto max-w-3xl border border-[#284b45] bg-[#0d211d] px-4 py-3"><p className="text-[10px] font-semibold tracking-[0.14em] text-[#50d2b6]">你的问题</p><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[#dce8e4]">{message.content}</p></div>;
-  return <article ref={ref as React.RefObject<HTMLElement>} className="max-w-4xl border-l-2 border-[#d98560] bg-[#0b1514] px-5 py-5"><div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.16em] text-[#d98c68]"><MessageSquareText size={14} />职业规划建议</div><p className="mt-3 whitespace-pre-wrap text-sm leading-8 text-[#c9d8d3]">{message.content}</p>{message.evidence && <Evidence evidence={message.evidence} />}</article>;
+  return <article ref={ref as React.RefObject<HTMLElement>} className="max-w-4xl border-l-2 border-[#d98560] bg-[#0b1514] px-5 py-5"><div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.16em] text-[#d98c68]"><MessageSquareText size={14} />职业规划建议</div><p className="mt-3 whitespace-pre-wrap text-sm leading-8 text-[#c9d8d3]">{message.content}</p>{message.evidence && <Evidence evidence={message.evidence} />}{showSuggestions && message.suggestedQuestions?.length ? <div className="mt-5 border-t border-[#1f3934] pt-4"><p className="flex items-center gap-2 text-[11px] font-medium tracking-[0.08em] text-[#62d7bd]"><Sparkles size={13} />你可能还想问</p><div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">{message.suggestedQuestions.map((question) => <button key={question} onClick={() => onSuggestedQuestion(question)} className="group flex min-h-10 w-full items-center justify-between gap-3 border border-[#284b45] bg-[#0d1b19] px-3 py-2.5 text-left text-xs leading-5 text-[#afc5bf] transition hover:border-[#45caae] hover:text-white sm:w-auto" type="button"><span>{question}</span><ChevronRight size={13} className="shrink-0 text-[#4f7068] transition group-hover:translate-x-0.5 group-hover:text-[#60dbc0]" /></button>)}</div></div> : null}</article>;
 }
 
 function ThinkingIndicator({ progress, preview }: { progress: ChatProgress | null; preview: EvidencePreview | null }) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEvidencePreview, formatFallbackCareerAnswer } from "@/lib/career-presentation";
+import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer } from "@/lib/career-presentation";
 import type { CareerEvidence } from "@/lib/evidence";
 
 const evidence: CareerEvidence = {
@@ -80,5 +80,13 @@ describe("career presentation", () => {
     expect(answer).not.toContain("0.000");
     expect(answer).not.toContain("无效建议");
     expect(answer).toContain("可进一步向系统指定目标职业或城市");
+  });
+
+  it("builds three evidence-based follow-up questions for fallback responses", () => {
+    expect(buildSuggestedQuestions(evidence)).toEqual([
+      "我距离数字技术工程技术人员还缺哪些关键技能？",
+      "如果补充Linux，我的职业匹配会发生什么变化？",
+      "培养方案中的哪些课程最有助于进入数字技术工程技术人员？"
+    ]);
   });
 });

@@ -27,6 +27,29 @@ export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview 
   };
 }
 
+export function buildSuggestedQuestions(evidence: CareerEvidence): string[] {
+  const occupation = evidence.occupations[0]?.name;
+  const nextSkill = evidence.nextSkills.find((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01)?.skill;
+  const city = evidence.cities[0]?.city;
+  const hasAiEvidence = evidence.profiles.some((profile) => {
+    const exposure = numberValue(profile, "aiExposure");
+    const cooccurrence = numberValue(profile, "aiCooccurrence");
+    return (exposure !== null && exposure > 0) || (cooccurrence !== null && Math.abs(cooccurrence) >= 0.01);
+  });
+  const questions = [
+    occupation ? `我距离${occupation}还缺哪些关键技能？` : "我应该优先选择哪个职业方向？",
+    nextSkill ? `如果补充${nextSkill}，我的职业匹配会发生什么变化？` : occupation ? `怎样用项目经历证明我适合${occupation}？` : "我下一步最值得补充哪项技能？",
+    evidence.curriculum && occupation
+      ? `培养方案中的哪些课程最有助于进入${occupation}？`
+      : hasAiEvidence && occupation
+        ? `AI会如何影响${occupation}，我该怎样准备？`
+        : city && occupation
+          ? `${city}有哪些更适合我的${occupation}岗位方向？`
+          : "人工智能时代我应该重点强化哪些能力？"
+  ];
+  return Array.from(new Set(questions)).slice(0, 3);
+}
+
 function numberValue(row: Record<string, unknown>, key: string): number | null {
   const value = row[key];
   const parsed = typeof value === "number" ? value : Number(value);
