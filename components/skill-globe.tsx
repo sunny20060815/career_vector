@@ -8,28 +8,22 @@ const SKILL_COUNT = 830;
 const CLUSTER_COUNT = 22;
 const GLOBE_RADIUS = 1.18;
 const FEATURED_SKILLS = [
-  { name: "人工智能", index: 18 },
-  { name: "Python", index: 56 },
-  { name: "数据分析", index: 94 },
-  { name: "Java", index: 132 },
-  { name: "质量管理", index: 170 },
-  { name: "工业自动化", index: 208 },
-  { name: "软件测试", index: 246 },
-  { name: "网络安全", index: 284 },
-  { name: "云计算", index: 322 },
-  { name: "大数据", index: 360 },
-  { name: "机械设计", index: 398 },
-  { name: "供应链管理", index: 436 },
-  { name: "沟通能力", index: 474 },
-  { name: "项目管理", index: 512 },
-  { name: "财务管理", index: 550 },
-  { name: "风险管理", index: 588 },
-  { name: "医药研发", index: 626 },
-  { name: "视觉设计", index: 664 },
-  { name: "人力资源", index: 702 },
-  { name: "安全管理", index: 740 },
-  { name: "数据库技术", index: 778 },
-  { name: "统计分析", index: 816 }
+  { name: "人工智能", index: 90 },
+  { name: "Python", index: 133 },
+  { name: "数据分析", index: 176 },
+  { name: "质量管理", index: 219 },
+  { name: "工业自动化", index: 262 },
+  { name: "软件测试", index: 305 },
+  { name: "网络安全", index: 348 },
+  { name: "云计算", index: 391 },
+  { name: "机械设计", index: 434 },
+  { name: "供应链管理", index: 477 },
+  { name: "沟通能力", index: 520 },
+  { name: "项目管理", index: 563 },
+  { name: "财务管理", index: 606 },
+  { name: "风险管理", index: 649 },
+  { name: "医药研发", index: 692 },
+  { name: "统计分析", index: 735 }
 ];
 
 function buildSkillPositions() {
@@ -95,6 +89,31 @@ function createPointTexture() {
   return texture;
 }
 
+function createLabelTexture(name: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.beginPath();
+    context.arc(18, 32, 5, 0, Math.PI * 2);
+    context.fillStyle = "#8bd5ff";
+    context.shadowColor = "#5ab8ff";
+    context.shadowBlur = 12;
+    context.fill();
+    context.shadowBlur = 8;
+    context.font = '500 24px "PingFang SC", "Microsoft YaHei", sans-serif';
+    context.textBaseline = "middle";
+    context.fillStyle = "#d8eaff";
+    context.fillText(name, 34, 33);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function SkillGlobe() {
   const panelRef = useRef<HTMLElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -137,7 +156,9 @@ export function SkillGlobe() {
 
     const pointTexture = createPointTexture();
     const { points, positions } = buildSkillPositions();
-    const labels = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(".globe-skill-label") ?? []);
+    const labelTextures: THREE.CanvasTexture[] = [];
+    const labelMaterials: THREE.SpriteMaterial[] = [];
+    const labelSprites: THREE.Sprite[] = [];
     const skillGeometry = new THREE.BufferGeometry();
     skillGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const skillMaterial = new THREE.PointsMaterial({
@@ -194,6 +215,33 @@ export function SkillGlobe() {
     });
     globe.add(new THREE.Mesh(shellGeometry, shellMaterial));
 
+    const occluderGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 0.975, 40, 24);
+    const occluderMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    occluderMaterial.colorWrite = false;
+    const occluder = new THREE.Mesh(occluderGeometry, occluderMaterial);
+    occluder.renderOrder = -1;
+    globe.add(occluder);
+
+    FEATURED_SKILLS.forEach((skill) => {
+      const texture = createLabelTexture(skill.name);
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        opacity: 0.92,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false
+      });
+      const label = new THREE.Sprite(material);
+      label.position.copy(points[skill.index]).multiplyScalar(1.075);
+      label.scale.set(Math.max(0.42, skill.name.length * 0.105 + 0.2), 0.15, 1);
+      label.center.set(0.05, 0.5);
+      label.renderOrder = 3;
+      globe.add(label);
+      labelTextures.push(texture);
+      labelMaterials.push(material);
+      labelSprites.push(label);
+    });
+
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const pointerTarget = { x: 0, y: 0 };
     const onPointerMove = (event: PointerEvent) => {
@@ -211,40 +259,17 @@ export function SkillGlobe() {
       renderer.setSize(width, height, true);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      labelSprites.forEach((label, index) => { label.visible = width >= 400 || index % 2 === 0; });
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     resize();
 
     let animationFrame = 0;
-    const projectedPoint = new THREE.Vector3();
     const render = () => {
       if (!reducedMotion.matches) globe.rotation.y += 0.0018;
       globe.rotation.x += ((-0.16 - pointerTarget.y) - globe.rotation.x) * 0.035;
       globe.rotation.z += ((0.08 + pointerTarget.x) - globe.rotation.z) * 0.025;
-      globe.updateMatrixWorld();
-      const candidates = labels.map((label, labelIndex) => {
-        const skill = FEATURED_SKILLS[labelIndex];
-        const worldPoint = points[skill.index].clone().multiplyScalar(1.035).applyMatrix4(globe.matrixWorld);
-        projectedPoint.copy(worldPoint).project(camera);
-        const x = (projectedPoint.x * 0.5 + 0.5) * host.clientWidth;
-        const y = (-projectedPoint.y * 0.5 + 0.5) * host.clientHeight;
-        const inFrame = x > 28 && x < host.clientWidth - 28 && y > 35 && y < host.clientHeight - 42;
-        const frontOpacity = THREE.MathUtils.clamp((worldPoint.z - 0.02) * 2.2, 0, 1);
-        label.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-        label.style.opacity = "0";
-        return { label, name: skill.name, x, y, opacity: inFrame ? frontOpacity : 0 };
-      });
-      const placed: Array<{ x: number; y: number; width: number }> = [];
-      const maxLabels = host.clientWidth < 400 ? 6 : 8;
-      candidates.sort((a, b) => b.opacity - a.opacity).forEach((candidate) => {
-        if (candidate.opacity < 0.16 || placed.length >= maxLabels) return;
-        const width = candidate.name.length * 9 + 12;
-        const overlaps = placed.some((item) => Math.abs(item.x - candidate.x) < (item.width + width) / 2 && Math.abs(item.y - candidate.y) < 18);
-        if (overlaps) return;
-        candidate.label.style.opacity = String(candidate.opacity);
-        placed.push({ x: candidate.x, y: candidate.y, width });
-      });
       renderer.render(scene, camera);
       animationFrame = window.requestAnimationFrame(render);
     };
@@ -259,10 +284,14 @@ export function SkillGlobe() {
       clusterGeometry.dispose();
       lineGeometry.dispose();
       shellGeometry.dispose();
+      occluderGeometry.dispose();
       skillMaterial.dispose();
       clusterMaterial.dispose();
       lineMaterial.dispose();
       shellMaterial.dispose();
+      occluderMaterial.dispose();
+      labelMaterials.forEach((material) => material.dispose());
+      labelTextures.forEach((texture) => texture.dispose());
       pointTexture.dispose();
       renderer.dispose();
       renderer.domElement.remove();
@@ -276,9 +305,6 @@ export function SkillGlobe() {
         <span className="flex items-center gap-2 text-[9px] tracking-[0.12em] text-[#789bbd]"><i className="globe-live-dot" />LIVE</span>
       </div>
       <div ref={canvasHostRef} className="absolute inset-0" />
-      <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden" aria-hidden="true">
-        {FEATURED_SKILLS.map((skill) => <span key={skill.name} className="globe-skill-label"><i />{skill.name}</span>)}
-      </div>
       <div className="globe-copy pointer-events-none absolute inset-x-4 bottom-3 z-10 flex items-end justify-between gap-3 sm:inset-x-5 sm:bottom-4">
         <div><p className="text-[10px] tracking-[0.1em] text-[#c5dcf1]">830项标准化技能 · 22个技能簇</p><p className="mt-1 text-[9px] text-[#6585a6]">每个光点代表一项技能</p></div>
         <p className="max-w-32 text-right text-[9px] leading-4 text-[#6585a6]">浅蓝连线表示技能共现关系</p>

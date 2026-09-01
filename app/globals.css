@@ -87,28 +87,6 @@ button { -webkit-tap-highlight-color: transparent; }
   animation: signal-pulse 2.1s ease-in-out infinite;
 }
 
-.globe-skill-label {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  font-size: 9px;
-  color: #d8eaff;
-  text-shadow: 0 1px 5px #06101f, 0 0 8px rgba(72, 163, 238, 0.78);
-  transition: opacity 160ms linear;
-  will-change: transform, opacity;
-}
-
-.globe-skill-label i {
-  width: 3px;
-  height: 3px;
-  background: #8bd5ff;
-  box-shadow: 0 0 7px rgba(100, 194, 255, 0.9);
-}
-
 .login-node {
   display: block;
   width: 7px;
