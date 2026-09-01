@@ -46,9 +46,10 @@ interface LocalCurriculumData {
   occupations: LocalOccupationRecord[];
 }
 
-const PROGRAMS_FILE = path.join(process.cwd(), "data", "02_关系表", "09_专业培养方案主表.csv");
-const MAJOR_SKILLS_FILE = path.join(process.cwd(), "data", "02_关系表", "10_专业技能关系表.csv");
-const OCCUPATIONS_FILE = path.join(process.cwd(), "data", "02_关系表", "11_职业大典职业明细表.csv");
+const DATA_DIRECTORY = path.join(process.cwd(), "data", "02_关系表");
+const PROGRAMS_FILE = path.join(DATA_DIRECTORY, "09_专业培养方案主表.csv");
+const MAJOR_SKILLS_FILE = path.join(DATA_DIRECTORY, "10_专业技能关系表.csv");
+const OCCUPATIONS_FILE = path.join(DATA_DIRECTORY, "11_职业大典职业明细表.csv");
 let cache: LocalCurriculumData | undefined;
 
 function readCsv(file: string): CsvRow[] {
@@ -110,7 +111,7 @@ export function localProgramCatalog(): LocalProgramCatalogEntry[] {
   }));
 }
 
-export function localProgramEvidence(programKey: string) {
+export function localProgramEvidence(programKey: string): { program: LocalProgramRecord | null; skills: LocalMajorSkillRecord[] } {
   const data = loadLocalCurriculum();
   const program = data.programs.find((row) => row.programKey === programKey) ?? null;
   const skills = data.majorSkills

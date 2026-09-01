@@ -37,15 +37,3 @@ describe("hasSupabasePublicConfig", () => {
     expect(() => env.deepseekAnswerTimeoutMs({ DEEPSEEK_ANSWER_TIMEOUT_MS: "60000" })).toThrow("DEEPSEEK_ANSWER_TIMEOUT_MS");
   });
 });
-
-describe("DeepSeek runtime configuration", () => {
-  it("uses deep thinking and a 90 second budget by default", () => {
-    expect(getDeepSeekThinkingMode(undefined)).toBe("enabled");
-    expect(getDeepSeekAnswerTimeoutMs(undefined)).toBe(90_000);
-  });
-
-  it("rejects invalid thinking and timeout values", () => {
-    expect(() => getDeepSeekThinkingMode("sometimes")).toThrow(/enabled/);
-    expect(() => getDeepSeekAnswerTimeoutMs("90001")).toThrow(/90000/);
-  });
-});

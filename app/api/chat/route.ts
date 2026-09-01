@@ -65,7 +65,7 @@ export async function POST(request: Request) {
           if (noData) {
             answer = "暂无相关记录。系统尚未在已入库的技能词典中识别出你的核心技能，请尝试写出更具体的工具、专业知识或岗位名称。";
           } else {
-            emit({ type: "status", payload: { stage: "writing", message: "正在为您深度分析职业方向、市场前景与能力提升路径..." } });
+            emit({ type: "status", payload: { stage: "writing", message: "已找到可引用的职业证据，正在整理成建议..." } });
             try {
               answer = await writeCareerAnswer(question, evidence);
             } catch {

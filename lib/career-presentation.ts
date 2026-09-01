@@ -9,14 +9,14 @@ export interface EvidencePreview {
   observedPairCount: number;
 }
 
-function names(rows: Array<Record<string, unknown>>, key: string): string[] {
-  return rows.map((row) => typeof row[key] === "string" ? row[key] : "").filter(Boolean);
-}
-
 export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview {
-  const sources = ["skills", "occupation_skill_stats", "city_skill_forecasts"];
+  const sources = ["skills", "occupation_skill_stats", "city_skill_forecasts", "skill_pairs"];
+  if (evidence.observedPairs.length) sources.push("pair_occupation_stats");
   if (evidence.curriculum) sources.push("major_programs", "major_skills");
   if (evidence.occupationDetails?.length) sources.push("occupation_catalog");
+  if (evidence.aiExposureDetails.length) sources.push("skill_ai_exposure");
+  if (evidence.aiCooccurrenceSource === "supabase") sources.push("ai_skill_cooccurrence");
+  if (evidence.aiCooccurrenceSource === "local_csv") sources.push("ai_skill_cooccurrence（本地索引兜底）");
   return {
     sources,
     skills: evidence.recognizedSkills.slice(0, 5),
@@ -41,20 +41,29 @@ function share(value: number | null): string {
   return value === null ? "暂无" : `${(value * 100).toFixed(1)}%`;
 }
 
+function pairLine(pair: CareerEvidence["observedPairs"][number]): string {
+  const wage = pair.wageComplementPct === null ? "暂无" : `${pair.wageComplementPct.toFixed(1)}%`;
+  const rate2025 = pair.demandRate2025 === null ? "暂无" : `${(pair.demandRate2025 * 100).toFixed(2)}%`;
+  const rate2028 = pair.demandRate2028 === null ? "暂无" : `${(pair.demandRate2028 * 100).toFixed(2)}%`;
+  const growth = pair.demandGrowthPct === null ? "暂无" : `${pair.demandGrowthPct.toFixed(1)}%`;
+  return `- ${pair.skillA}+${pair.skillB}：共现强度${fixed(pair.cooccurrence, 3)}，2025年组合需求率${rate2025}，2028年预测${rate2028}，需求增长${growth}，工资互补效应${wage}，证据等级${pair.evidenceLevel || "暂无"}。`;
+}
+
 export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
   const skillLines = evidence.profiles.slice(0, 6).map((profile) => {
     const forecast = typeof profile.forecast === "object" && profile.forecast !== null ? profile.forecast as Record<string, unknown> : {};
     const name = String(profile.displayName || profile.skill || "相关技能");
-    return `- ${name}：2025年需求率${share(numberValue(profile, "demandRate2025"))}、需求强度${fixed(numberValue(profile, "demandPer10k2025"))}个/万岗位，月薪中位数${fixed(numberValue(profile, "salaryMedian2025"), 0)}元，最低经验${fixed(numberValue(profile, "experienceMean2025"))}年，本科及以上占比${share(numberValue(profile, "bachelorOrAboveShare2025"))}；${evidence.forecastYear}年预测需求率${share(numberValue(forecast, "demandRatio"))}、需求强度${fixed(numberValue(forecast, "demandPer10k"))}个/万岗位、月薪${fixed(numberValue(forecast, "salaryMedian"), 0)}元，趋势为${String(forecast.trend || "暂无判断")}；关联职业AI暴露度${fixed(numberValue(profile, "aiExposure"))}，与AI技能的共现强度${fixed(numberValue(profile, "aiCooccurrence"), 3)}。`;
+    return `- ${name}：2025年需求率${share(numberValue(profile, "demandRate2025"))}、需求强度${fixed(numberValue(profile, "demandPer10k2025"))}个/万岗位，月薪中位数${fixed(numberValue(profile, "salaryMedian2025"), 0)}元，最低经验${fixed(numberValue(profile, "experienceMean2025"))}年，本科及以上占比${share(numberValue(profile, "bachelorOrAboveShare2025"))}、研究生占比${share(numberValue(profile, "graduateShare2025"))}；${evidence.forecastYear}年预测需求率${share(numberValue(forecast, "demandRatio"))}、需求强度${fixed(numberValue(forecast, "demandPer10k"))}个/万岗位、月薪${fixed(numberValue(forecast, "salaryMedian"), 0)}元，趋势为${String(forecast.trend || "暂无判断")}；关联职业AI暴露度${fixed(numberValue(profile, "aiExposure"))}，与AI技能的共现强度${fixed(numberValue(profile, "aiCooccurrence"), 3)}，历史AI协同占比${share(numberValue(profile, "aiCooccurrenceShare"))}。`;
   });
   const occupationLines = evidence.occupations.slice(0, 5).map((item, index) => `${index + 1}. ${item.name}（匹配技能：${item.matchedSkills.join("、") || "暂无"}）`);
   const detailLines = (evidence.occupationDetails ?? []).slice(0, 5).map((item) => `${item.subclassName}包含${item.occupations.slice(0, 5).map((occupation) => occupation.name).join("、")}`);
   const pairLines = evidence.observedPairs.length
-    ? evidence.observedPairs.slice(0, 6).map((pair) => `- ${pair.skillA}+${pair.skillB}：共现强度${fixed(pair.cooccurrence, 3)}，工资互补效应${pair.wageComplementPct === null ? "暂无" : `${pair.wageComplementPct.toFixed(1)}%`}，2025至2028年组合需求增长${pair.demandGrowthPct === null ? "暂无" : `${pair.demandGrowthPct.toFixed(1)}%`}。`)
-    : ["- 当前没有直接观测到完整技能组合，因此不推断组合工资互补效应。"];
+    ? evidence.observedPairs.slice(0, 6).map(pairLine)
+    : ["- 当前没有直接观测到完整技能组合，因此不推断组合工资互补效应和组合需求前景。"];
   const cityLines = evidence.cities.slice(0, 5).map((item, index) => `${index + 1}. ${item.city}（匹配技能：${item.matchedSkills.join("、")}）`);
   const nextLines = evidence.nextSkills.slice(0, 5).map((item) => `- ${item.skill}：与现有的${item.relatedTo}联系较紧密，共现强度${fixed(item.cooccurrence, 3)}。`);
+  const aiDetailLines = evidence.aiExposureDetails.slice(0, 6).map((item) => `- ${item.skill}在${item.aiGroup || "相关"}职业组中的技能需求占比：2025年${share(item.demandShare2025)}，${evidence.forecastYear}年预测${share(item.demandShare2028)}。`);
   const curriculumSection = curriculum ? [
     "**培养方案基础**",
     `${String(curriculum.school || "")}${String(curriculum.cohort || "")}${String(curriculum.major || "")}；培养目标：${String(curriculum.training_objectives || "暂无")}；核心课程：${String(curriculum.core_courses || "暂无")}。`,
@@ -65,11 +74,12 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
     `建议优先围绕${evidence.occupations.slice(0, 3).map((item) => item.name).join("、") || "现有技能相关岗位"}规划求职，并重点补齐能形成直接组合证据的技能。`,
     ...curriculumSection,
     "**技能市场画像**",
-    ...skillLines,
-    "与AI技能的共现强度表示该技能与AI技能在同一岗位要求中共同出现的紧密程度，反映联系而非因果。",
+    ...(skillLines.length ? skillLines : ["当前没有足够的技能市场画像。"]),
+    "与AI技能的共现强度表示该技能与AI技能在同一岗位要求中共同出现的紧密程度，反映联系而非因果，也不代表薪资溢价。",
+    ...(aiDetailLines.length ? ["**AI 渗透率补充**", ...aiDetailLines] : []),
     "**职业匹配**",
     ...(occupationLines.length ? occupationLines : ["当前职业证据不足。"]),
-    ...(detailLines.length ? detailLines : []),
+    ...detailLines,
     "**已观测技能组合**",
     ...pairLines,
     `**${evidence.forecastYear}年城市建议**`,

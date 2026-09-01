@@ -26,7 +26,7 @@ sequenceDiagram
   N->>S: 本地解析后检索聚合证据
   N-->>B: SSE 返回已匹配证据
   N->>D: 带真实证据的思考模式请求
-  alt 90 秒内返回
+  alt 50 秒内返回
     D-->>N: 最终 content（不含推理原文）
   else 超时、网络或模型异常
     N->>N: 由同一份 CareerEvidence 生成本地兜底回答
@@ -38,15 +38,15 @@ sequenceDiagram
 
 ### 2.1 时间预算
 
-Vercel 的 `app/api/chat/route.ts` 函数最大持续时间调整为 100 秒。模型阶段最多使用 90 秒，具体预算如下：
+Vercel 的 `app/api/chat/route.ts` 函数最大持续时间调整为 60 秒。模型并不能占满 60 秒，具体预算如下：
 
 | 阶段 | 上限 | 责任 |
 |---|---:|---|
 | 本地解析、Supabase 检索、SSE 证据预览 | 正常情况下数秒 | `lib/local-query.ts`、`lib/evidence.ts`、Route Handler |
-| DeepSeek 思考并生成最终可见内容 | 90 秒 | `lib/deepseek.ts` |
+| DeepSeek 思考并生成最终可见内容 | 50 秒 | `lib/deepseek.ts` |
 | 发生异常后的本地兜底、持久化与 SSE 结束 | 预留约 10 秒 | `lib/career-presentation.ts`、Route Handler |
 
-模型阶段通过 `AbortSignal.timeout(90_000)` 主动终止，不能依赖 Vercel 强制终止。这样即使模型慢，接口仍会在总时限内返回基于真实证据的可用回答。
+模型阶段通过 `AbortSignal.timeout(50_000)` 主动终止，不能依赖 Vercel 强制终止。这样即使模型慢，用户仍会在一分钟内获得基于真实数据库证据的可用回答。
 
 ### 2.2 可见回答与安全边界
 
@@ -65,10 +65,10 @@ DeepSeek 请求显式使用 `thinking: { type: "enabled" }`。前端和数据库
 ```text
 DEEPSEEK_ANSWER_MODEL=deepseek-v4-flash
 DEEPSEEK_THINKING_MODE=enabled
-DEEPSEEK_ANSWER_TIMEOUT_MS=90000
+DEEPSEEK_ANSWER_TIMEOUT_MS=50000
 ```
 
-`DEEPSEEK_THINKING_MODE` 只允许 `enabled` 或 `disabled`；非法值在服务端启动时给出清晰错误。`DEEPSEEK_ANSWER_TIMEOUT_MS` 使用保守的正整数范围，默认 90000，不能高于 Route Handler 的 100 秒时限。`DEEPSEEK_API_KEY`、Supabase service-role 密钥仍不能出现在任何 `NEXT_PUBLIC_` 变量、客户端代码、Git 提交或文档示例中。
+`DEEPSEEK_THINKING_MODE` 只允许 `enabled` 或 `disabled`；非法值在服务端启动时给出清晰错误。`DEEPSEEK_ANSWER_TIMEOUT_MS` 使用保守的正整数范围，默认 50000，不能高于 Route Handler 的 60 秒时限。`DEEPSEEK_API_KEY`、Supabase service-role 密钥仍不能出现在任何 `NEXT_PUBLIC_` 变量、客户端代码、Git 提交或文档示例中。
 
 ## 3. 代码改动范围
 
@@ -107,7 +107,7 @@ DEEPSEEK_ANSWER_TIMEOUT_MS=90000
 2. 为环境变量新增断言：允许的开关值、非法开关值、非正数或超过安全上限的超时都能返回清晰错误。
 3. 运行 `npm test`、`npm run lint`、`npm run build` 和 `git diff --check`。
 4. 本地运行 `npm run dev`，以示例问题验证先收到 SSE 证据，再在模型成功或受控超时时收到最终回答；不使用真实用户邮箱或密钥作为测试输出。
-5. 推送后由 Vercel 自动构建；上线验证检查页面可加载、浏览器控制台无异常、问答接口不泄露密钥，并确认 100 秒内产生最终回答或证据兜底。
+5. 推送后由 Vercel 自动构建；上线验证检查页面可加载、浏览器控制台无异常、问答接口不泄露密钥，并确认 60 秒内产生最终回答或证据兜底。
 
 验收标准是：用户能读懂新增课件；服务端开启思考模式时可获得更完整的回答；模型慢或失败时不会超过一分钟无响应；所有敏感密钥继续留在本地或 Vercel 服务端环境变量中。
 
@@ -115,7 +115,7 @@ DEEPSEEK_ANSWER_TIMEOUT_MS=90000
 
 | 风险 | 处理方式 |
 |---|---|
-| 深度思考显著增加延迟或成本 | 只保留一次模型调用、限制 90 秒、限制异常超长内容，并保留环境变量开关。 |
+| 深度思考显著增加延迟或成本 | 只保留一次模型调用、限制 50 秒、限制可见内容长度，并保留环境变量开关。 |
 | Vercel 函数在模型返回前结束 | 主动设置小于函数上限的模型超时，并通过本地兜底结束 SSE。 |
 | 模型暴露内部推理或虚构数据 | 仅读取 `content`，提示词限制证据来源，保持已有的组合证据边界。 |
 | 文档与实际实现脱节 | 将 README 与架构文档和代码同一次更新；验收时交叉检查配置名、路径和时间值。 |

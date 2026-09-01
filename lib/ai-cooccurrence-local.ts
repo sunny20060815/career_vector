@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { parse } from "csv-parse/sync";
 
-interface AiCooccurrenceRecord {
+export interface AiCooccurrenceRecord {
   cooccurrence: number | null;
   share: number | null;
 }
@@ -12,7 +12,8 @@ let cache: Map<string, AiCooccurrenceRecord> | undefined;
 
 export function localAiCooccurrence(): Map<string, AiCooccurrenceRecord> {
   if (cache) return cache;
-  const rows = parse(readFileSync(path.join(process.cwd(), "data", "02_关系表", "08_AI技能共现关系表.csv"), "utf8"), {
+  const file = path.join(process.cwd(), "data", "02_关系表", "08_AI技能共现关系表.csv");
+  const rows = parse(readFileSync(file, "utf8"), {
     columns: true,
     bom: true,
     skip_empty_lines: true
