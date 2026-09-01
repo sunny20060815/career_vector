@@ -56,4 +56,11 @@ describe("buildDeepSeekPayload", () => {
     expect(messages.at(-1)?.content).toContain("\"aiExposureDetails\"");
     expect(messages.at(-1)?.content).toContain("\"aiCooccurrenceSource\"");
   });
+
+  it("prioritizes an actionable career decision over a report-style evidence dump", () => {
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("建议优先");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("培养方案推断能力");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("默认回答结构");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("报告式结构");
+  });
 });
