@@ -4,13 +4,13 @@
 
 :root {
   color-scheme: dark;
-  --surface-page: #1f2a38;
-  --surface-sidebar: #243243;
-  --surface-canvas: #202d3d;
-  --surface-raised: #2a3a4d;
-  --border-slate: #496077;
+  --surface-page: #061a33;
+  --surface-sidebar: #08213f;
+  --surface-canvas: #071c36;
+  --surface-raised: #0d2a4d;
+  --border-slate: #1d4d74;
   --accent-blue: #58a6e7;
-  --accent-blue-soft: #254c70;
+  --accent-blue-soft: #0d3d69;
   --text-main: #e8edf4;
 }
 
@@ -38,13 +38,13 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 * {
-  scrollbar-color: #526b83 #243243;
+  scrollbar-color: #22577f #08213f;
   scrollbar-width: thin;
 }
 
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: #243243; }
-*::-webkit-scrollbar-thumb { background: #526b83; border: 2px solid #243243; }
+*::-webkit-scrollbar-track { background: #08213f; }
+*::-webkit-scrollbar-thumb { background: #22577f; border: 2px solid #08213f; }
 
 .status-dot {
   display: inline-block;
@@ -57,7 +57,7 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .skill-globe {
   isolation: isolate;
-  background-color: #213b58;
+  background-color: #082b4f;
   background-image:
     linear-gradient(rgba(97, 181, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(97, 181, 255, 0.035) 1px, transparent 1px);
