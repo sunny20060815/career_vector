@@ -564,7 +564,7 @@ export async function planCareerQuestion(question: string, query: ParsedCareerQu
 }
 
 export async function writeCareerAnswer(question: string, evidence: object): Promise<CareerAdvisorOutput> {
-  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 42_000) });
+  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 38_000) });
   const output = parseCareerAdvisorOutput(content);
   return { ...output, answer: limitCareerAnswer(output.answer) };
 }
