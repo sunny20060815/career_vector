@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, BookOpen, BrainCircuit, ChevronRight, CircleCheck, Clock3, Database, LogOut, MessageSquareText, MessageSquareWarning, Plus, Radar, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowUp, BookOpen, BrainCircuit, ChevronRight, CircleCheck, Clock3, Database, LogOut, MessageSquareText, MessageSquareWarning, Plus, Radar, ShieldCheck, Smartphone, Sparkles, Users } from "lucide-react";
 import gsap from "gsap";
 
+import { AboutUs } from "@/components/about-us";
 import { DataMethods } from "@/components/data-methods";
 import { FeedbackPanel } from "@/components/feedback-panel";
 import { SkillGlobe } from "@/components/skill-globe";
@@ -29,7 +30,7 @@ const localPreview = process.env.NODE_ENV === "development" && process.env.NEXT_
 const phoneAuthBaseUrl = "https://zhivectone-auth-vrsbhqbyuj.ap-southeast-1.fcapp.run";
 
 export function CareerWorkbench() {
-  const [activeView, setActiveView] = useState<"planner" | "methods" | "feedback">("planner");
+  const [activeView, setActiveView] = useState<"planner" | "methods" | "feedback" | "about">("planner");
   const [authChecked, setAuthChecked] = useState(false);
   const [userIdentity, setUserIdentity] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
@@ -191,9 +192,10 @@ export function CareerWorkbench() {
         <section className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#071c36]">
           <header className="shrink-0 border-b border-[#174366] bg-[#08213f]/95">
             <div className="flex h-16 items-center justify-between px-4 md:px-7"><div className="md:hidden"><Brand /></div><div className="hidden items-center gap-3 text-xs text-[#6686a1] md:flex"><span className="status-dot" />职业技能数据引擎已连接</div><div className="flex items-center gap-2 text-[10px] tracking-[0.12em] text-[#526f87]"><Database size={13} />DATASET 2014—2026.03</div></div>
-            <nav className="flex h-11 items-stretch gap-6 border-t border-[#12375a] px-4 md:px-7" aria-label="主导航">
+            <nav className="flex h-11 items-stretch gap-5 overflow-x-auto border-t border-[#12375a] px-4 md:gap-6 md:px-7" aria-label="主导航">
               <ViewTab active={activeView === "planner"} icon={Radar} label="职业规划" onClick={() => setActiveView("planner")} />
               <ViewTab active={activeView === "methods"} icon={BookOpen} label="数据与方法" onClick={() => setActiveView("methods")} />
+              <ViewTab active={activeView === "about"} icon={Users} label="关于我们" onClick={() => setActiveView("about")} />
               <ViewTab active={activeView === "feedback"} icon={MessageSquareWarning} label="问题反馈" onClick={() => setActiveView("feedback")} />
             </nav>
           </header>
@@ -210,7 +212,7 @@ export function CareerWorkbench() {
             </form>
             {error && <p className="pointer-events-auto mx-auto mt-2 max-w-5xl border-l-2 border-[#e07c58] bg-[#251511] px-3 py-2 text-xs text-[#efaa90]">{error}</p>}
             </div>
-          </> : activeView === "methods" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><DataMethods /></div> : <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><FeedbackPanel userIdentity={userIdentity} /></div>}
+          </> : activeView === "methods" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><DataMethods /></div> : activeView === "feedback" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><FeedbackPanel userIdentity={userIdentity} /></div> : <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><AboutUs /></div>}
         </section>
       </div>
       {authChecked && !userIdentity && <LoginOverlay />}
