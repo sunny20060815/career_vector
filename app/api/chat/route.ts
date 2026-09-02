@@ -6,6 +6,7 @@ import { planCareerQuestion, writeCareerAnswer } from "@/lib/deepseek";
 import { parseCareerQuestionFromCatalog, retrieveCareerEvidence } from "@/lib/evidence";
 import { mergeCareerQueryContext } from "@/lib/query";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { CareerQueryPlan } from "@/lib/career-plan";
 import type { ChatRequest, ChatResponse } from "@/types/api";
 import type { ParsedCareerQuery } from "@/types/career";
 
@@ -20,6 +21,42 @@ function errorResponse(message: string, status: number) {
 
 function titleFor(question: string): string {
   return question.replace(/\s+/g, " ").trim().slice(0, 28) || "新职业咨询";
+}
+
+function progressCopy(plan: CareerQueryPlan) {
+  const copy = {
+    learning_plan: {
+      searching: "正在读取培养方案、课程能力与岗位需求...",
+      writing: "课程与岗位证据已对齐，正在整理学习路径...",
+      fallback: "生成服务较慢，正在依据培养方案与岗位证据完成学习建议..."
+    },
+    ai_tasks: {
+      searching: "正在读取AI暴露、技能共现与职业任务证据...",
+      writing: "正在区分AI辅助环节、替代压力与能力优势...",
+      fallback: "生成服务较慢，正在依据AI暴露与技能证据完成回答..."
+    },
+    comparison: {
+      searching: "正在读取两项选择的需求、工资与预测指标...",
+      writing: "比较证据已就绪，正在形成投入优先级...",
+      fallback: "生成服务较慢，正在依据可比指标完成优先级判断..."
+    },
+    trend: {
+      searching: "正在读取历史需求、工资与未来预测序列...",
+      writing: "预测证据已就绪，正在归纳趋势与不确定性...",
+      fallback: "生成服务较慢，正在依据预测序列完成趋势判断..."
+    },
+    recommendation: {
+      searching: "正在读取职业匹配、技能需求与城市证据...",
+      writing: "匹配证据已就绪，正在形成职业规划建议...",
+      fallback: "生成服务较慢，正在依据职业与技能证据完成建议..."
+    },
+    explanation: {
+      searching: "正在读取回答当前问题所需的劳动力市场证据...",
+      writing: "相关证据已就绪，正在组织针对性说明...",
+      fallback: "生成服务较慢，正在依据已检索证据完成说明..."
+    }
+  } as const;
+  return copy[plan.answerStyle];
 }
 
 export async function POST(request: Request) {
@@ -37,7 +74,6 @@ export async function POST(request: Request) {
       const emit = (event: Parameters<typeof encodeChatStreamEvent>[0]) => controller.enqueue(encoder.encode(encodeChatStreamEvent(event)));
       void (async () => {
         try {
-          emit({ type: "status", payload: { stage: "understanding", message: "正在识别技能与求职偏好..." } });
           const supabase = await createServerSupabaseClient();
           const { data: claimsData } = await supabase.auth.getClaims();
           const userId = claimsData?.claims?.sub;
@@ -64,7 +100,8 @@ export async function POST(request: Request) {
 
           const query = mergeCareerQueryContext(await parseCareerQuestionFromCatalog(question), previousQuery);
           const queryPlan = await planCareerQuestion(question, query);
-          emit({ type: "status", payload: { stage: "searching", message: "正在按问题调用相关职业、技能与趋势数据..." } });
+          const taskProgress = progressCopy(queryPlan);
+          emit({ type: "status", payload: { stage: "searching", message: taskProgress.searching } });
           const evidence = await retrieveCareerEvidence(query, queryPlan);
           const preview = buildEvidencePreview(evidence);
           emit({ type: "evidence", payload: { preview } });
@@ -72,7 +109,7 @@ export async function POST(request: Request) {
           const noData = evidence.recognizedSkills.length === 0;
           let answer: string;
           let suggestedQuestions: string[] = [];
-          emit({ type: "status", payload: { stage: "writing", message: noData ? "正在结合你的问题整理可操作的说明..." : "已找到可引用的职业证据，正在整理成建议..." } });
+          emit({ type: "status", payload: { stage: "writing", message: taskProgress.writing } });
           try {
             const generated = await writeCareerAnswer(question, evidence);
             answer = generated.answer;
@@ -81,7 +118,7 @@ export async function POST(request: Request) {
             console.error("DeepSeek career answer failed; using evidence fallback", {
               message: error instanceof Error ? error.message : String(error)
             });
-            emit({ type: "status", payload: { stage: "fallback", message: "生成服务较慢，正在依据现有信息整理建议..." } });
+            emit({ type: "status", payload: { stage: "fallback", message: taskProgress.fallback } });
             answer = noData ? formatNoDataCareerAnswer(question) : formatFallbackCareerAnswer(evidence, question);
             suggestedQuestions = buildSuggestedQuestions(evidence);
           }

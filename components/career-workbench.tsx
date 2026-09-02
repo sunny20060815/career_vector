@@ -25,7 +25,6 @@ const examples = [
   { icon: Database, title: "未来趋势", text: "机器学习和 SQL 到2028年的需求、工资与城市覆盖会怎样变化？", note: "历史观测 · 未来预测" }
 ];
 
-const thinkingPhrases = ["正在理解您的经历", "正在匹配职业与城市", "正在分析技能组合", "正在为您生成职业规划"];
 const localPreview = process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_LOCAL_PREVIEW === "true";
 const phoneAuthBaseUrl = "https://zhivectone-auth-vrsbhqbyuj.ap-southeast-1.fcapp.run";
 
@@ -122,7 +121,7 @@ export function CareerWorkbench() {
     if (!submitted || loading) return;
     if (!userIdentity) return setError("请先登录后再提交职业咨询。");
     setLoading(true);
-    setProgress({ stage: "understanding", message: "正在识别技能与求职偏好..." });
+    setProgress({ stage: "understanding", message: initialTaskProgress(submitted) });
     setPreview(null);
     setError("");
     setQuestion("");
@@ -202,7 +201,7 @@ export function CareerWorkbench() {
 
           {activeView === "planner" ? <>
             <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-48 pt-6 md:px-8 md:pb-52 lg:px-12">
-              {!messages.length && !loading ? <Intro containerRef={introRef} onExample={(value) => { setQuestion(value); requestAnimationFrame(resizeTextarea); }} /> : <div className="mx-auto max-w-5xl space-y-7">{messages.map((message, index) => <MessageBlock key={message.id} message={message} showSuggestions={!loading && index === messages.length - 1} onSuggestedQuestion={(value) => void sendQuestion(value)} />)}{loading && <ThinkingIndicator progress={progress} preview={preview} />}</div>}
+              {!messages.length && !loading ? <Intro containerRef={introRef} onExample={(value) => { setQuestion(value); requestAnimationFrame(resizeTextarea); }} /> : <div className="mx-auto max-w-5xl space-y-7">{messages.map((message, index) => <MessageBlock key={message.id} message={message} showSuggestions={!loading && index === messages.length - 1} onSuggestedQuestion={(value) => void sendQuestion(value)} />)}{loading && <ThinkingIndicator progress={progress} preview={preview} question={[...messages].reverse().find((message) => message.role === "user")?.content ?? ""} />}</div>}
             </div>
 
             <div className="composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-[#174366] bg-[#071c36]/95 px-3 pb-3 pt-3 md:px-8 md:pb-6 lg:px-12">
@@ -396,11 +395,91 @@ function AnswerContent({ content }: { content: string }) {
   })}</div>;
 }
 
-function ThinkingIndicator({ progress, preview }: { progress: ChatProgress | null; preview: EvidencePreview | null }) {
+function taskKind(question: string) {
+  if (/培养方案|课程学习|学习规划|课程.*建议/.test(question)) return "curriculum";
+  if (/(?:AI|人工智能).{0,16}(?:辅助|替代|影响|冲击|任务|渗透|暴露)/i.test(question)) return "ai";
+  if (/比较|对比|相比|哪个|哪项|更值得|还是/.test(question)) return "comparison";
+  if (/城市|哪里|哪座/.test(question)) return "city";
+  if (/组合|互补|共现/.test(question)) return "combination";
+  if (/202[678]|趋势|未来|增长|下降/.test(question)) return "trend";
+  return "career";
+}
+
+function initialTaskProgress(question: string) {
+  const copy = {
+    curriculum: "正在识别学校、年级、专业与目标方向...",
+    ai: "正在识别技能、职业与AI影响焦点...",
+    comparison: "正在识别比较对象与判断标准...",
+    city: "正在识别目标职业与地域偏好...",
+    combination: "正在识别技能组合与评价重点...",
+    trend: "正在识别技能及需要预测的指标...",
+    career: "正在识别专业、技能与求职目标..."
+  } as const;
+  return copy[taskKind(question)];
+}
+
+function taskThinkingPhrases(question: string, stage: ChatProgress["stage"] | undefined): string[] {
+  const kind = taskKind(question);
+  const copy = {
+    curriculum: {
+      understanding: ["正在定位你的年级与专业培养方案"],
+      searching: ["正在提取相关课程与培养能力", "正在关联课程训练与岗位需求"],
+      writing: ["正在生成分阶段课程学习建议"],
+      fallback: ["正在依据培养方案整理学习路径"]
+    },
+    ai: {
+      understanding: ["正在识别你关心的AI影响场景"],
+      searching: ["正在调取AI暴露与技能共现证据", "正在区分可辅助任务与潜在替代压力"],
+      writing: ["正在形成针对性的AI协作策略"],
+      fallback: ["正在依据现有证据整理AI应对建议"]
+    },
+    comparison: {
+      understanding: ["正在识别需要比较的选项"],
+      searching: ["正在对齐两项选择的可比指标", "正在比较需求、工资与未来趋势"],
+      writing: ["正在判断更值得优先投入的方向"],
+      fallback: ["正在依据可用指标完成比较"]
+    },
+    city: {
+      understanding: ["正在识别你的职业与地域偏好"],
+      searching: ["正在比较不同城市的岗位容量", "正在匹配城市产业与技能需求"],
+      writing: ["正在生成城市选择建议"],
+      fallback: ["正在依据城市数据整理建议"]
+    },
+    combination: {
+      understanding: ["正在识别你的技能组合"],
+      searching: ["正在检索技能共现与工资互补证据", "正在评估组合需求与城市覆盖"],
+      writing: ["正在判断技能组合的市场价值"],
+      fallback: ["正在依据组合证据整理建议"]
+    },
+    trend: {
+      understanding: ["正在识别需要观察的预测指标"],
+      searching: ["正在调取历史需求与预测序列", "正在比较需求、工资和城市变化"],
+      writing: ["正在形成未来趋势判断"],
+      fallback: ["正在依据预测结果整理趋势"]
+    },
+    career: {
+      understanding: ["正在梳理你的专业、技能与目标"],
+      searching: ["正在匹配职业需求与技能证据", "正在评估岗位前景与能力缺口"],
+      writing: ["正在生成个性化职业建议"],
+      fallback: ["正在依据现有证据整理职业建议"]
+    }
+  } as const;
+  return [...copy[kind][stage ?? "understanding"]];
+}
+
+function ThinkingIndicator({ progress, preview, question }: { progress: ChatProgress | null; preview: EvidencePreview | null; question: string }) {
   const [index, setIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const phraseRef = useRef<HTMLParagraphElement>(null);
-  useEffect(() => { const timer = window.setInterval(() => setIndex((current) => (current + 1) % thinkingPhrases.length), 1800); return () => window.clearInterval(timer); }, []);
+  const phrases = taskThinkingPhrases(question, progress?.stage);
+  const phraseKey = `${taskKind(question)}-${progress?.stage ?? "understanding"}`;
+  const phraseCount = phrases.length;
+  useEffect(() => {
+    setIndex(0);
+    if (phraseCount < 2) return;
+    const timer = window.setInterval(() => setIndex((current) => (current + 1) % phraseCount), 1800);
+    return () => window.clearInterval(timer);
+  }, [phraseKey, phraseCount]);
   useLayoutEffect(() => {
     if (!rootRef.current) return;
     const mm = gsap.matchMedia();
@@ -412,7 +491,7 @@ function ThinkingIndicator({ progress, preview }: { progress: ChatProgress | nul
     return () => mm.revert();
   }, []);
   useLayoutEffect(() => { if (phraseRef.current) gsap.fromTo(phraseRef.current, { autoAlpha: 0, y: 5 }, { autoAlpha: 1, y: 0, duration: 0.32, ease: "power1.out" }); }, [index]);
-  return <div ref={rootRef} className="max-w-4xl overflow-hidden border border-[#22577f] bg-[#0c294a]"><div className="relative h-0.5 overflow-hidden bg-[#12375a]"><i className="thinking-scan absolute left-0 top-0 h-full w-1/4 bg-[#4b97d6]" /></div><div className="flex items-center gap-4 px-5 py-5"><span className="flex h-7 items-end gap-1">{[0, 1, 2, 3].map((item) => <i key={item} className="thinking-bar block h-6 w-1 bg-[#4b97d6]" />)}</span><div><p ref={phraseRef} className="text-sm font-medium text-[#d8e0e7]">{thinkingPhrases[index]}</p><p className="mt-1 text-xs text-[#57768f]">{progress?.message ?? "正在检索招聘数据与技能关系..."}</p></div></div>{preview && <div className="border-t border-[#174366] px-5 pb-4"><ReferencePreview preview={preview} /></div>}</div>;
+  return <div ref={rootRef} className="max-w-4xl overflow-hidden border border-[#22577f] bg-[#0c294a]"><div className="relative h-0.5 overflow-hidden bg-[#12375a]"><i className="thinking-scan absolute left-0 top-0 h-full w-1/4 bg-[#4b97d6]" /></div><div className="flex items-center gap-4 px-5 py-5"><span className="flex h-7 items-end gap-1">{[0, 1, 2, 3].map((item) => <i key={item} className="thinking-bar block h-6 w-1 bg-[#4b97d6]" />)}</span><div><p ref={phraseRef} className="text-sm font-medium text-[#d8e0e7]">{phrases[index] ?? phrases[0]}</p><p className="mt-1 text-xs text-[#57768f]">{progress?.message ?? "正在确定本轮问题所需的数据..."}</p></div></div>{preview && <div className="border-t border-[#174366] px-5 pb-4"><ReferencePreview preview={preview} /></div>}</div>;
 }
 
 function Evidence({ evidence }: { evidence: ChatResponse["evidence"] }) {
