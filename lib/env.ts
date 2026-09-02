@@ -67,7 +67,5 @@ export const env = {
   supabaseUrl: () => required("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseAnonKey: () => required("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   supabaseServiceRoleKey: () => required("SUPABASE_SERVICE_ROLE_KEY"),
-  resendApiKey: () => required("RESEND_API_KEY"),
-  feedbackToEmail: () => process.env.FEEDBACK_TO_EMAIL ?? "32024030101@cueb.edu.cn",
-  feedbackFromEmail: () => process.env.FEEDBACK_FROM_EMAIL ?? "职向量 <feedback@zhivector.com>"
+  feedbackServiceUrl: (source: ServerEnvironment = process.env) => (source.FEEDBACK_SERVICE_URL ?? "https://zhivectone-auth-vrsbhqbyuj.ap-southeast-1.fcapp.run").replace(/\/$/, "")
 };

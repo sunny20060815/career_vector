@@ -5,7 +5,7 @@
 ## 本地运行
 
 1. 安装 Node.js 22 LTS。
-2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY` 和 `RESEND_API_KEY` 只能保存在本地或 Vercel 服务端环境变量中。默认的 `DEEPSEEK_ANSWER_MODEL=deepseek-v4-flash` 与 `DEEPSEEK_THINKING_MODE=enabled` 会在服务端生成更完整的建议；浏览器只会收到最终回答，不会收到推理原文。`DEEPSEEK_ANSWER_TIMEOUT_MS=50000` 会在模型超过 50 秒时转为本地证据兜底。
+2. 复制 `.env.example` 为 `.env.local`，填写变量。`DEEPSEEK_API_KEY` 和 `SUPABASE_SERVICE_ROLE_KEY` 只能保存在本地或 Vercel 服务端环境变量中。默认的 `DEEPSEEK_ANSWER_MODEL=deepseek-v4-flash` 与 `DEEPSEEK_THINKING_MODE=enabled` 会在服务端生成更完整的建议；浏览器只会收到最终回答，不会收到推理原文。`DEEPSEEK_ANSWER_TIMEOUT_MS=50000` 会在模型超过 50 秒时转为本地证据兜底。
 3. 执行 `npm install`、`npm test`、`npm run dev`，浏览器访问 `http://localhost:3000`。
 
 ## 初始化 Supabase
@@ -38,9 +38,10 @@
 
 ## 配置问题反馈邮件
 
-1. 在 Resend 创建 API Key，并验证 `zhivector.com` 域名。
-2. 在 Vercel 环境变量中设置 `RESEND_API_KEY`。`FEEDBACK_TO_EMAIL` 默认是 `32024030101@cueb.edu.cn`，`FEEDBACK_FROM_EMAIL` 默认是 `职向量 <feedback@zhivector.com>`，需要时可以覆盖。
-3. 重新部署后，登录网站并在“问题反馈”标签提交一条测试信息。反馈只由服务端发送，API Key 不会进入浏览器。
+1. 在阿里云邮件推送中验证发信域名并创建触发邮件类型的发信地址。
+2. 为函数计算使用的 RAM 身份授予 `dm:SingleSendMail`，在 `zhivector-phone-auth` 函数中配置 `ALIYUN_DM_ACCOUNT_NAME`、`ALIYUN_DM_TO_ADDRESS`、`ALIYUN_DM_FROM_ALIAS`、`SUPABASE_URL` 和 `SUPABASE_ANON_KEY`。
+3. 上传 `deploy/aliyun-phone-auth` 的最新代码并部署。网站默认将反馈转发到现有函数公网地址；仅地址改变时才需要设置 `FEEDBACK_SERVICE_URL`。
+4. 登录网站并在“问题反馈”标签提交测试信息。AccessKey 只保存在阿里云函数环境变量中，不进入浏览器或网站源码。
 
 ## 数据边界与扩展
 

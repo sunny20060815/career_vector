@@ -24,6 +24,7 @@ describe("hasSupabasePublicConfig", () => {
   it("uses thinking and timeout defaults when optional values are absent", () => {
     expect(env.deepseekThinkingMode({})).toBe("enabled");
     expect(env.deepseekAnswerTimeoutMs({})).toBe(50_000);
+    expect(env.feedbackServiceUrl({})).toBe("https://zhivectone-auth-vrsbhqbyuj.ap-southeast-1.fcapp.run");
   });
 
   it("accepts an explicit mode and bounded timeout", () => {
