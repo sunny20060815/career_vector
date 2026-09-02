@@ -27,6 +27,39 @@ export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview 
   };
 }
 
+export function buildSuggestedQuestions(evidence: CareerEvidence): string[] {
+  const occupation = evidence.occupations[0]?.name;
+  const nextSkill = evidence.nextSkills.find((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01)?.skill;
+  const city = evidence.cities[0]?.city;
+  const hasAiEvidence = evidence.profiles.some((profile) => {
+    const exposure = numberValue(profile, "aiExposure");
+    const cooccurrence = numberValue(profile, "aiCooccurrence");
+    return (exposure !== null && exposure > 0) || (cooccurrence !== null && Math.abs(cooccurrence) >= 0.01);
+  });
+  const questions = [
+    occupation ? `我距离${occupation}还缺哪些关键技能？` : "我应该优先选择哪个职业方向？",
+    nextSkill ? `如果补充${nextSkill}，我的职业匹配会发生什么变化？` : occupation ? `怎样用项目经历证明我适合${occupation}？` : "我下一步最值得补充哪项技能？",
+    evidence.curriculum && occupation
+      ? `培养方案中的哪些课程最有助于进入${occupation}？`
+      : hasAiEvidence && occupation
+        ? `AI会如何影响${occupation}，我该怎样准备？`
+        : city && occupation
+          ? `${city}有哪些更适合我的${occupation}岗位方向？`
+          : "人工智能时代我应该重点强化哪些能力？"
+  ];
+  return Array.from(new Set(questions)).slice(0, 3);
+}
+
+export function formatNoDataCareerAnswer(question: string): string {
+  if (/怎样|怎么|如何/.test(question) && /描述|输入/.test(question)) {
+    return "你可以按“学校与年级+专业+已经掌握的技能+经验或项目+目标职业或城市”来描述。例如：我是首经贸2024级经济学（实验班）学生，会Python和Stata，做过数据分析项目，想在北京寻找数据分析相关岗位。请区分课程接触过的内容与已经能够独立使用的技能，系统会据此分别识别专业基础和个人增强能力。";
+  }
+  if (/培养方案|课程/.test(question)) {
+    return "可以分析，但还需要先确定你的学校、年级和专业，以匹配对应培养方案。请补充类似“首经贸2024级经济学（实验班）”的信息；若再提供目标职业，系统还会比较课程训练与岗位技能需求之间的差距。";
+  }
+  return "这个问题可以继续分析，但目前还缺少能够连接招聘数据的个人或目标信息。请至少补充专业、已掌握技能、目标职业或目标城市中的一项；方法、概念和输入方式类问题也可以直接提问，无需先提供技能。";
+}
+
 function numberValue(row: Record<string, unknown>, key: string): number | null {
   const value = row[key];
   const parsed = typeof value === "number" ? value : Number(value);
@@ -35,6 +68,25 @@ function numberValue(row: Record<string, unknown>, key: string): number | null {
 
 function profileName(profile: Record<string, unknown>): string {
   return String(profile.displayName || profile.skill || "相关技能");
+}
+
+function curriculumSentence(curriculum: Record<string, unknown>, inferredSkills: string[]): string {
+  const courses = String(curriculum.core_courses || "")
+    .split(/[、，,；;\n]/)
+    .map((course) => course.trim())
+    .filter(Boolean);
+  const quantitative = courses.filter((course) => /统计|计量|数学|预测|数据|编程|模型|算法|机器学习|人工智能/.test(course)).slice(0, 4);
+  const theory = courses.filter((course) => !quantitative.includes(course)).slice(0, 2);
+  const modules = [
+    theory.length ? `专业理论（${theory.join("、")}）` : "",
+    quantitative.length ? `定量与工具训练（${quantitative.join("、")}）` : ""
+  ].filter(Boolean).join("和");
+  const potential = inferredSkills.slice(0, 3).join("、");
+  const major = String(curriculum.major || "");
+  const trainedAbilities = quantitative.length
+    ? /经济|金融|贸易|财政/.test(major) ? "专业问题分析、定量研究和经济预测" : "专业分析、定量研究和工具应用"
+    : potential || "专业分析与问题解决";
+  return `培养方案以${modules || "专业课程与实践训练"}为主要基础，校内学习可能为${trainedAbilities}提供训练；这些课程覆盖仍需通过项目或实习转化为可验证能力。`;
 }
 
 function profileSentence(profile: Record<string, unknown>, forecastYear: number): string {
@@ -74,8 +126,29 @@ function pairSentence(pair: CareerEvidence["observedPairs"][number]): string {
   return `${pair.skillA}与${pair.skillB}已有直接组合记录，但现有证据不足以判断工资互补。`;
 }
 
-export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
+function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Record<string, unknown>): string {
+  const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((course) => course.trim()).filter(Boolean);
+  const quantitative = courses.filter((course) => /统计|计量|数学|预测|数据|编程|模型|算法|机器学习|人工智能/.test(course)).slice(0, 4);
+  const theory = courses.filter((course) => !quantitative.includes(course)).slice(0, 4);
+  const occupation = evidence.occupations[0]?.name || "目标职业";
+  const nextSkill = evidence.nextSkills.find((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01)?.skill;
+  return [
+    "**课程学习建议**",
+    `建议围绕${occupation}建立“专业理论—定量工具—综合应用”的学习主线。培养方案中的课程覆盖只能说明学校提供了训练基础，最终仍需要通过项目成果证明你能够独立应用。`,
+    "**学习顺序**",
+    `1. 先吃透${theory.slice(0, 3).join("、") || "专业基础课程"}，重点训练问题定义、理论解释和专业判断。`,
+    `2. 再强化${quantitative.join("、") || "定量与工具课程"}，把公式和方法转化为可复现的数据分析过程。`,
+    `3. 最后完成一个面向${occupation}的综合项目，形成“问题提出—数据处理—分析验证—结果解释”的完整作品。`,
+    "**课程外补充**",
+    nextSkill ? `${nextSkill}与现有能力存在直接共现证据，可作为优先验证的补充技能。` : "现有证据不足以确定唯一的下一技能，建议先围绕目标职业完成课程项目，再根据项目中的真实缺口补充工具。",
+    "**AI辅助方式**",
+    "可以使用AI辅助资料梳理、代码解释、调试和初步结果检查，但问题设定、数据质量判断、方法选择与结果解释应由你自己完成，并在作品集中明确人工核验过程。"
+  ].join("\n\n");
+}
+
+export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = ""): string {
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
+  if (curriculum && /课程学习|学习建议|学习规划|课程.*怎么|课程.*如何/.test(question)) return formatCurriculumLearningAnswer(evidence, curriculum);
   const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;
   const confirmedSet = new Set(confirmedSkills);
   const inferredSkills = (evidence.inferredSkills ?? []).filter((skill) => !confirmedSet.has(skill));
@@ -117,8 +190,8 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
     const major = curriculum ? String(curriculum.major || "").trim() : "";
     reasonLines.push(`你当前最可信的优势是${major ? `“${major}+${confirmedSkills.slice(0, 3).join("+")}”` : confirmedSkills.slice(0, 3).join("、")}，职业排序主要依据这些明确输入的技能。`);
   }
-  if (curriculum && inferredSkills.length) {
-    reasonLines.push(`培养方案可能覆盖${inferredSkills.slice(0, 3).join("、")}等基础，但课程覆盖不能视为你已经掌握，建议通过项目或实习进一步验证。`);
+  if (curriculum) {
+    reasonLines.push(curriculumSentence(curriculum, inferredSkills));
   }
   for (const occupation of occupations.slice(0, 2)) {
     const matches = occupation.confirmedMatches.length ? occupation.confirmedMatches : occupation.item.matchedSkills.slice(0, 2);
@@ -129,11 +202,29 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
   reasonLines.push(...selectedProfiles.map((profile) => profileSentence(profile, evidence.forecastYear)));
 
   const aiProfile = selectedProfiles
-    .map((profile) => ({ profile, value: numberValue(profile, "aiCooccurrence") }))
-    .filter((item): item is { profile: Record<string, unknown>; value: number } => item.value !== null && Math.abs(item.value) >= 0.01)
-    .sort((left, right) => Math.abs(right.value) - Math.abs(left.value))[0];
+    .map((profile) => ({
+      profile,
+      cooccurrence: numberValue(profile, "aiCooccurrence"),
+      exposure: numberValue(profile, "aiExposure")
+    }))
+    .filter((item) => (item.exposure !== null && item.exposure > 0) || (item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01))
+    .sort((left, right) => Number(right.cooccurrence !== null && Math.abs(right.cooccurrence) >= 0.01)
+      - Number(left.cooccurrence !== null && Math.abs(left.cooccurrence) >= 0.01)
+      || (right.exposure ?? 0) - (left.exposure ?? 0))[0];
   if (aiProfile) {
-    reasonLines.push(`${profileName(aiProfile.profile)}与AI技能的共现强度为${aiProfile.value.toFixed(3)}，表示两者在同一岗位要求中联系较紧密，但不代表因果关系或工资溢价。`);
+    const name = profileName(aiProfile.profile);
+    const detail = evidence.aiExposureDetails.find((item) => item.skill === name);
+    const group = String(aiProfile.profile.aiGroup || detail?.aiGroup || "").trim();
+    const aiFacts = [
+      aiProfile.exposure !== null ? `关联职业AI暴露度约${aiProfile.exposure.toFixed(1)}` : "",
+      group ? `属于${group}` : "",
+      aiProfile.cooccurrence !== null && Math.abs(aiProfile.cooccurrence) >= 0.01
+        ? `与AI技能的共现强度为${aiProfile.cooccurrence.toFixed(3)}`
+        : ""
+    ].filter(Boolean).join("，");
+    reasonLines.push(`${name}${aiFacts ? `的${aiFacts}` : "存在有效AI关联证据"}。AI暴露较高表示任务更可能被调整，不等于职业会被整体替代。`);
+    const hasDataSkills = confirmedSkills.some((skill) => /Python|Stata|R语言|数据|统计|SQL|编程|算法/.test(skill));
+    reasonLines.push(`AI时代下，可让AI辅助${hasDataSkills ? "代码生成、数据清洗、初步分析和结果整理" : "结构化信息处理、文本整理和方案草拟"}，本人则重点强化${curriculum && /经济/.test(String(curriculum.major || "")) ? "经济问题定义、因果识别、数据质量判断和结果解释" : "领域问题定义、数据质量判断、结果核验和沟通决策"}，形成“专业判断+AI协作”能力。`);
   }
 
   const meaningfulPair = evidence.observedPairs
@@ -154,14 +245,15 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence): string {
     .filter((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01 && confirmedSet.has(item.relatedTo))
     .slice(0, 2);
   const primaryOccupation = occupations[0]?.item.name || "目标岗位";
+  const secondaryOccupation = occupations[1]?.item.name;
   const actions = [
-    `围绕${occupations.map((item) => item.item.name).join("、") || "目标方向"}各收集约20条招聘信息，比较重复出现的职责和技能缺口。`,
+    `将${primaryOccupation}作为主方向${secondaryOccupation ? `，将${secondaryOccupation}作为备选` : ""}，简历、课程项目和实习经历优先围绕主方向组织。`,
     usefulNextSkills.length
       ? usefulNextSkills.length === 1
         ? `优先验证${usefulNextSkills[0].skill}：它与现有的${usefulNextSkills[0].relatedTo}存在直接共现证据。`
         : `优先验证${usefulNextSkills.map((item) => item.skill).join("或")}：它们分别与现有的${usefulNextSkills.map((item) => item.relatedTo).join("、")}存在直接共现证据。`
-      : "先确定一个目标职业，再从真实岗位中选择出现频率较高的缺口技能，不依据零值共现结果盲目补课。",
-    `用一个课程项目、实习或作品集证明${confirmedSkills.slice(0, 2).join("和") || "核心能力"}能够完成${primaryOccupation}中的实际任务。`
+      : "当前没有可靠的下一技能证据，可进一步向系统指定目标职业或城市，再缩小技能缺口范围。",
+    `完成一个面向${primaryOccupation}的课程项目或作品集，明确展示${confirmedSkills.slice(0, 2).join("和") || "核心能力"}的应用过程，以及AI辅助与人工核验各自负责的环节。`
   ];
 
   return [

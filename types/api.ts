@@ -10,6 +10,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   conversationId: string;
   answer: string;
+  suggestedQuestions: string[];
   query: ParsedCareerQuery | null;
   evidence: CareerEvidence;
   noData: boolean;

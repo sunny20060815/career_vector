@@ -11,6 +11,7 @@ export async function POST(request: Request) {
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
   const userEmail = typeof claimsData?.claims?.email === "string" ? claimsData.claims.email : "未提供";
+  const isPhoneAccount = userEmail.endsWith("@auth.zhivector.com");
   if (!userId) return NextResponse.json({ error: "请先登录后再提交反馈" }, { status: 401 });
 
   try {
@@ -25,11 +26,11 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         from: env.feedbackFromEmail(),
         to: [env.feedbackToEmail()],
-        reply_to: userEmail === "未提供" ? undefined : userEmail,
+        reply_to: userEmail === "未提供" || isPhoneAccount ? undefined : userEmail,
         subject: `【职向量问题反馈】${feedbackCategories[payload.category]}`,
         text: [
           `问题类型：${feedbackCategories[payload.category]}`,
-          `用户邮箱：${userEmail}`,
+          `登录账号：${isPhoneAccount ? "手机号账号" : userEmail}`,
           `用户ID：${userId}`,
           `提交时间：${new Date().toISOString()}`,
           "",

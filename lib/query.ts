@@ -64,6 +64,24 @@ export function normaliseSkillToken(value: string): string {
     .replace(/[\s_\-—－/\\（）()]+/g, "");
 }
 
+export function mergeCareerQueryContext(current: ParsedCareerQuery, previous?: ParsedCareerQuery | null): ParsedCareerQuery {
+  if (!previous) return current;
+  return {
+    ...current,
+    skills: Array.from(new Set([...previous.skills, ...current.skills])).slice(0, 12),
+    occupationKeywords: Array.from(new Set([...previous.occupationKeywords, ...current.occupationKeywords])).slice(0, 12),
+    cities: current.cities.length ? current.cities : previous.cities,
+    salaryMinYuan: current.salaryMinYuan ?? previous.salaryMinYuan,
+    salaryMaxYuan: current.salaryMaxYuan ?? previous.salaryMaxYuan,
+    experienceYears: current.experienceYears ?? previous.experienceYears,
+    education: current.education ?? previous.education,
+    programKey: current.programKey ?? previous.programKey,
+    school: current.school ?? previous.school,
+    cohort: current.cohort ?? previous.cohort,
+    major: current.major ?? previous.major
+  };
+}
+
 export function validateParsedCareerQuery(value: unknown): ParsedCareerQuery {
   if (!isRecord(value)) {
     throw new Error("模型返回的查询对象不是 JSON 对象");

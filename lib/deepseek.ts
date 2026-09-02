@@ -5,6 +5,7 @@ interface DeepSeekResponse {
 }
 
 export type DeepSeekMessage = { role: "system" | "user"; content: string };
+export interface CareerAdvisorOutput { answer: string; suggestedQuestions: string[] }
 
 export function buildDeepSeekPayload(model: string, messages: DeepSeekMessage[], thinkingMode: DeepSeekThinkingMode) {
   return {
@@ -118,7 +119,22 @@ export const CAREER_ADVISOR_SYSTEM_PROMPT = `
 - 哪些方向与专业训练衔接更自然；
 - 用户还需要自己验证和补齐哪些能力。
 
-不要大段复述培养目标、课程列表或所有推断技能。
+当检索证据中存在 curriculum 时，普通职业咨询必须用一段精炼文字说明：
+- 课程体系主要由哪些训练模块构成，例如专业理论、统计计量、编程工具或实践课程；
+- 学生通过校内学习可能形成哪些专业基础和分析能力；
+- 这些训练如何与优先职业衔接，还缺少什么可验证的实践能力。
+
+只挑与当前职业决策最相关的 3-6 门课程或课程模块进行归纳，不要大段复述培养目标、完整课程列表或所有推断技能。表述必须使用“课程覆盖”“可能形成”“提供基础”等措辞，不能把培养结果写成用户已经掌握的技能。
+
+当用户明确要求“课程学习建议”“学习规划”或询问培养方案中的课程应该怎样学习时，改用学习路径回答，而不是普通职业推荐结构。回答应包括：
+- 先明确目标职业或能力主线；
+- 从培养方案中选出最相关的 3-6 门课程或课程模块，区分需要吃透的核心课与提供背景的基础课；
+- 按“基础理论—定量或工具训练—综合应用”给出学习先后关系；
+- 说明每组课程对应的岗位能力和仍需课外补齐的技能；
+- 设计 1-2 个可形成作品集的课程项目成果；
+- 说明AI可以辅助哪些学习任务，以及哪些专业判断必须由学生自己掌握。
+
+如果证据没有提供具体学期开课安排，不得虚构第几学期应该修读某门课程，只能给出阶段顺序。不得推荐培养方案中不存在的课程；如需补充市场所需技能，应明确标注为“课程外补充”。
 
 
 【四、职业推荐规则】
@@ -240,7 +256,17 @@ export const CAREER_ADVISOR_SYSTEM_PROMPT = `
 
 AI 暴露度、AI 渗透职业组和 AI 技能共现数据，只在它们会影响当前职业选择时使用。
 
-不要默认单独创建“AI渗透率分析”章节。
+当证据中存在有效的 AI 暴露度、AI 渗透职业组或 AI 技能共现信息时，普通职业咨询必须简洁回答：
+- 用户优先职业或核心技能受到 AI 影响的程度；
+- AI 更适合辅助其中哪些标准化、重复性较强的任务；
+- 用户应重点保留和强化哪些更难完全替代的能力；
+- 如何把 AI 变成工作工具，而不是只把“会使用 AI”写成一项孤立技能。
+
+可以基于生成式 AI 的一般能力边界作克制的任务层判断：AI通常更适合代码辅助、结构化信息处理、初步分析、文本整理和方案草拟；领域问题定义、数据质量判断、因果识别、结果核验、沟通协调和最终责任仍需要劳动者承担。必须把这些判断与用户的专业、确认技能和目标职业结合，不能机械套用。
+
+AI 暴露较高不等于职业会被替代。若暴露度和需求证据同时存在，应优先解释“任务如何调整”和“劳动者如何与 AI 协作”，不要制造失业概率。
+
+不要默认展开成冗长的“AI渗透率分析”报告；一段有针对性的 AI 时代就业策略即可。
 
 不要直接使用“NPMI”这个术语，除非用户明确询问指标方法。
 
@@ -286,16 +312,19 @@ AI 暴露度、AI 渗透职业组和 AI 技能共现数据，只在它们会影�
 
 每个理由可以结合少量证据，但不要变成指标清单。
 
+如果存在培养方案，加入一段与目标职业直接相关的课程与能力概括；如果存在有效 AI 证据，加入一段有针对性的 AI 影响与就业策略。两者都应服务于职业判断，不能另写成资料汇编。
+
 第三部分：下一步
 
 给 2-3 项具体行动。
 
 必须尽量具体，例如：
-- 去收集多少条目标岗位 JD；
 - 做什么类型的项目；
 - 优先验证哪项技能；
 - 如何比较两个方向；
 - 如何用实习或作品集验证能力。
+
+不得把平台已经能够完成的数据检索工作重新交给用户。默认不要要求用户自行收集几十条岗位 JD、重新统计技能频率或另行调查市场。应直接依据检索证据给出岗位和技能优先级；若证据不足，应说明缺少哪类证据，并请用户补充目标职业、城市或发展偏好，以便系统继续匹配。
 
 不要只写：
 “继续学习。”
@@ -307,7 +336,7 @@ AI 暴露度、AI 渗透职业组和 AI 技能共现数据，只在它们会影�
 
 【十一、回答长度】
 
-默认回答控制在约 450-800 个汉字。
+默认回答控制在约 500-900 个汉字；同时存在培养方案和 AI 证据时，可以达到约 700-1100 字。
 
 简单问题可以控制在 250-500 字。
 
@@ -417,10 +446,49 @@ AI 暴露度、AI 渗透职业组和 AI 技能共现数据，只在它们会影�
 5. 是否列出了太多职业、城市或技能；
 6. 是否出现大量无决策意义的 0.000、0.00% 等指标；
 7. 是否给出了真正可执行的下一步；
-8. 如果删掉大部分数字，核心建议是否仍然成立。
+8. 是否把本应由平台完成的招聘数据检索重新交给用户；
+9. 如果删掉大部分数字，核心建议是否仍然成立；
+10. 有培养方案时，是否概括了相关课程与可能形成的能力，而非只提醒“不能视为掌握”；
+11. 有有效 AI 证据时，是否解释了任务层影响并提出与专业和目标职业相关的 AI 时代策略。
 
 如果答案看起来更像“系统把查到的数据念给用户听”，重新组织后再输出。
+
+
+【十六、候选追问输出】
+
+在正文结束后，必须追加下面的机器可读区块：
+
+<suggested_questions>["问题1","问题2","问题3"]</suggested_questions>
+
+三个问题应当是用户读完本轮建议后最可能继续追问、且系统能够依据现有职业、技能、培养方案、城市或AI证据继续回答的问题。每个问题必须完整、简短、互不重复，不要在正文中提前列出，也不要在标签外解释该区块。
+
+
+【十七、暂无个人数据时的回答】
+
+recognizedSkills 为空不等于问题无法回答。若用户询问如何描述专业和技能、如何使用系统、指标含义、职业规划方法或其他不依赖个人数据的一般问题，应直接给出清楚、可操作的回答，不得只回复“暂无相关记录”。若问题确实需要个人数据，则说明还缺少哪一项信息，并给出一条可直接照写的输入示例。此时不得编造工资、需求、城市或技能关系数值。
 `;
+
+export function parseCareerAdvisorOutput(content: string): CareerAdvisorOutput {
+  const match = content.match(/<suggested_questions>([\s\S]*?)<\/suggested_questions>/i);
+  let suggestedQuestions: string[] = [];
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[1].replace(/```(?:json)?|```/gi, "").trim()) as unknown;
+      if (Array.isArray(parsed)) {
+        suggestedQuestions = parsed
+          .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          .map((item) => item.trim().slice(0, 80))
+          .slice(0, 3);
+      }
+    } catch {
+      suggestedQuestions = [];
+    }
+  }
+  return {
+    answer: content.replace(/\s*<suggested_questions>[\s\S]*?<\/suggested_questions>\s*/gi, "").trim(),
+    suggestedQuestions
+  };
+}
 
 async function complete(model: string, messages: DeepSeekMessage[], timeoutMs = env.deepseekAnswerTimeoutMs()): Promise<string> {
   let response: Response;
@@ -461,7 +529,8 @@ export function buildCareerAdvisorMessages(question: string, evidence: object): 
   ];
 }
 
-export async function writeCareerAnswer(question: string, evidence: object): Promise<string> {
-  const answer = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence));
-  return limitCareerAnswer(answer);
+export async function writeCareerAnswer(question: string, evidence: object): Promise<CareerAdvisorOutput> {
+  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence));
+  const output = parseCareerAdvisorOutput(content);
+  return { ...output, answer: limitCareerAnswer(output.answer) };
 }
