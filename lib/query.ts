@@ -69,6 +69,7 @@ export function mergeCareerQueryContext(current: ParsedCareerQuery, previous?: P
   return {
     ...current,
     skills: Array.from(new Set([...previous.skills, ...current.skills])).slice(0, 12),
+    confirmedSkills: Array.from(new Set([...(previous.confirmedSkills ?? previous.skills), ...(current.confirmedSkills ?? [])])).slice(0, 12),
     occupationKeywords: Array.from(new Set([...previous.occupationKeywords, ...current.occupationKeywords])).slice(0, 12),
     cities: current.cities.length ? current.cities : previous.cities,
     salaryMinYuan: current.salaryMinYuan ?? previous.salaryMinYuan,
@@ -110,6 +111,7 @@ export function validateParsedCareerQuery(value: unknown): ParsedCareerQuery {
 
   return {
     skills: stringArray(value.skills, "技能"),
+    confirmedSkills: stringArray(value.confirmedSkills, "用户确认技能"),
     occupationKeywords: stringArray(value.occupationKeywords, "职业关键词"),
     cities: stringArray(value.cities, "城市"),
     salaryMinYuan,

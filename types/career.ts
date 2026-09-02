@@ -18,6 +18,7 @@ export type EducationLevel =
 
 export interface ParsedCareerQuery {
   skills: string[];
+  confirmedSkills?: string[];
   occupationKeywords: string[];
   cities: string[];
   salaryMinYuan: number | null;

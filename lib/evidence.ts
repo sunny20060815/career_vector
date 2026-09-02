@@ -4,6 +4,7 @@ import { localAiCooccurrence } from "@/lib/ai-cooccurrence-local";
 import { localOccupationEvidence, localProgramCatalog, localProgramEvidence } from "@/lib/curriculum-local";
 import { rankOccupations, selectObservedPairs, type OccupationSkillStat, type PairOccupationStat, type SkillPair } from "@/lib/ranking";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { CareerEvidenceModule, CareerQueryPlan } from "@/lib/career-plan";
 import type { ParsedCareerQuery } from "@/types/career";
 
 type Row = Record<string, unknown>;
@@ -46,6 +47,8 @@ export interface CareerEvidence {
   inferredSkills?: string[];
   curriculum?: Record<string, unknown> | null;
   occupationDetails?: Array<{ subclassCode: string; subclassName: string; occupations: Array<{ name: string; description: string }> }>;
+  queryPlan?: CareerQueryPlan;
+  queriedModules?: CareerEvidenceModule[];
 }
 
 function text(row: Row, key: string): string {
@@ -128,15 +131,24 @@ export async function parseCareerQuestionFromCatalog(question: string): Promise<
   return parseCareerQuestionLocally(question, catalog.skills, catalog.programs);
 }
 
-export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<CareerEvidence> {
+export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan?: CareerQueryPlan): Promise<CareerEvidence> {
   const admin = createAdminClient();
-  const { data: majorSkillRows, error: majorSkillError } = query.programKey
+  const modules = new Set<CareerEvidenceModule>(queryPlan?.modules ?? ["skill_profiles", "occupations", "skill_pairs", "next_skills", "cities", "ai_impact", "curriculum", "occupation_catalog"]);
+  const needsCurriculum = modules.has("curriculum");
+  const needsProfiles = modules.has("skill_profiles") || modules.has("ai_impact");
+  const needsOccupations = modules.has("occupations") || modules.has("occupation_catalog");
+  const needsPairs = modules.has("skill_pairs") || modules.has("next_skills");
+  const needsCities = modules.has("cities");
+  const needsAi = modules.has("ai_impact");
+  const { data: majorSkillRows, error: majorSkillError } = query.programKey && needsCurriculum
     ? await admin.from("major_skills").select("canonical_name,skill_type,cluster_name,rank,evidence_summary,mapping_basis").eq("program_key", query.programKey).eq("is_representative", true).order("rank").limit(12)
     : { data: [], error: null };
   if (majorSkillError) console.warn("Program skills are unavailable; continuing with confirmed skills", majorSkillError.message);
   let localProgram = { program: null, skills: [] } as ReturnType<typeof localProgramEvidence>;
-  if (query.programKey && (majorSkillError || !majorSkillRows?.length)) localProgram = localProgramEvidence(query.programKey);
-  const effectiveMajorSkillRows: Row[] = majorSkillError || !majorSkillRows?.length
+  if (query.programKey && needsCurriculum && (majorSkillError || !majorSkillRows?.length)) localProgram = localProgramEvidence(query.programKey);
+  const effectiveMajorSkillRows: Row[] = !needsCurriculum
+    ? []
+    : majorSkillError || !majorSkillRows?.length
     ? localProgram.skills.map((row) => ({ canonical_name: row.canonicalName, skill_type: row.skillType, cluster_name: row.clusterName, rank: row.rank, evidence_summary: row.evidenceSummary, mapping_basis: row.mappingBasis }))
     : (majorSkillRows as Row[]);
   const inferredSkills = effectiveMajorSkillRows.map((row) => text(row, "canonical_name")).filter(Boolean);
@@ -153,18 +165,20 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<
     ...((directSkills ?? []) as Row[]).map((row) => text(row, "canonical_name")),
     ...inferredSkills
   ].filter(Boolean)));
-  const confirmedSkills = recognizedSkills.filter((skill) => !inferredSkills.includes(skill) || query.skills.some((item) => normaliseSkillToken(item) === normaliseSkillToken(skill)));
+  const confirmedTokens = (query.confirmedSkills ?? query.skills).map(normaliseSkillToken);
+  const confirmedSkills = recognizedSkills.filter((skill) => confirmedTokens.includes(normaliseSkillToken(skill)));
   const unresolvedSkills = query.skills.filter((skill) => !recognizedSkills.some((item) => normaliseSkillToken(item) === normaliseSkillToken(skill)));
   if (!recognizedSkills.length) {
-    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], curriculum: null, occupationDetails: [] };
+    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules) };
   }
 
+  const profileFields = `canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,forecast_2026,forecast_2027,forecast_2028,fact_summary${needsAi ? ",ai_exposure,ai_group,ai_cooccurrence_npmi,ai_cooccurrence_share" : ""}`;
   const [{ data: profiles, error: profileError }, { data: occupationRows, error: occupationError }, { data: cityRows, error: cityError }, { data: pairsFromSkillA, error: pairFromSkillAError }, { data: pairsFromSkillB, error: pairFromSkillBError }] = await Promise.all([
-    admin.from("skills").select("canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,ai_exposure,ai_group,ai_cooccurrence_npmi,ai_cooccurrence_share,forecast_2026,forecast_2027,forecast_2028,fact_summary").in("canonical_name", recognizedSkills),
-    admin.from("occupation_skill_stats").select("canonical_name,occupation_code,occupation_name,probability,concentration,forecast_demand_2026,forecast_demand_2027,forecast_demand_2028").in("canonical_name", recognizedSkills),
-    admin.from("city_skill_forecasts").select("canonical_name,city,demand_per_10k,demand_volume_index").in("canonical_name", recognizedSkills).eq("forecast_year", query.forecastYear),
-    admin.from("skill_pairs").select("id,skill_a,skill_b,npmi,wage_complement_pct,wage_complement_p_value,demand_rate_2025,demand_rate_2028,demand_growth_pct,evidence_level").in("skill_a", recognizedSkills),
-    admin.from("skill_pairs").select("id,skill_a,skill_b,npmi,wage_complement_pct,wage_complement_p_value,demand_rate_2025,demand_rate_2028,demand_growth_pct,evidence_level").in("skill_b", recognizedSkills)
+    needsProfiles ? admin.from("skills").select(profileFields).in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null }),
+    needsOccupations ? admin.from("occupation_skill_stats").select("canonical_name,occupation_code,occupation_name,probability,concentration,forecast_demand_2026,forecast_demand_2027,forecast_demand_2028").in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null }),
+    needsCities ? admin.from("city_skill_forecasts").select("canonical_name,city,demand_per_10k,demand_volume_index").in("canonical_name", recognizedSkills).eq("forecast_year", query.forecastYear) : Promise.resolve({ data: [], error: null }),
+    needsPairs ? admin.from("skill_pairs").select("id,skill_a,skill_b,npmi,wage_complement_pct,wage_complement_p_value,demand_rate_2025,demand_rate_2028,demand_growth_pct,evidence_level").in("skill_a", recognizedSkills) : Promise.resolve({ data: [], error: null }),
+    needsPairs ? admin.from("skill_pairs").select("id,skill_a,skill_b,npmi,wage_complement_pct,wage_complement_p_value,demand_rate_2025,demand_rate_2028,demand_growth_pct,evidence_level").in("skill_b", recognizedSkills) : Promise.resolve({ data: [], error: null })
   ]);
   if (profileError || occupationError || cityError || pairFromSkillAError || pairFromSkillBError) {
     throw new Error("职业证据查询失败");
@@ -186,7 +200,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<
       demandGrowthPct: nullableNumeric(row, "demand_growth_pct"),
       evidenceLevel: text(row, "evidence_level")
     }));
-  const { data: pairOccupationRows, error: pairOccupationError } = observedPairIds.length
+  const { data: pairOccupationRows, error: pairOccupationError } = needsOccupations && observedPairIds.length
     ? await admin.from("pair_occupation_stats").select("pair_id,occupation_code,probability,concentration").in("pair_id", observedPairIds)
     : { data: [], error: null };
   if (pairOccupationError) {
@@ -201,8 +215,8 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<
   }));
   const rankedOccupations = rankOccupations(recognizedSkills, occupationStats, pairOccupationStats);
   const [{ data: aiExposureRows, error: aiExposureError }, { data: aiCooccurrenceRows, error: aiCooccurrenceError }] = await Promise.all([
-    admin.from("skill_ai_exposure").select("canonical_name,ai_group,demand_share_2025,demand_share_2028").in("canonical_name", recognizedSkills),
-    admin.from("ai_skill_cooccurrence").select("canonical_name,cooccurrence_npmi,historical_ai_collaboration_share").in("canonical_name", recognizedSkills)
+    needsAi ? admin.from("skill_ai_exposure").select("canonical_name,ai_group,demand_share_2025,demand_share_2028").in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null }),
+    needsAi ? admin.from("ai_skill_cooccurrence").select("canonical_name,cooccurrence_npmi,historical_ai_collaboration_share").in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null })
   ]);
   if (aiExposureError) console.warn("AI exposure detail table is unavailable; using skill profile fields", aiExposureError.message);
   if (aiCooccurrenceError) console.warn("AI cooccurrence table is unavailable; using bundled index", aiCooccurrenceError.message);
@@ -218,24 +232,28 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<
       share: nullableNumeric(row, "historical_ai_collaboration_share")
     }])
   );
-  const localAi = localAiCooccurrence();
+  const localAi = needsAi ? localAiCooccurrence() : new Map<string, { cooccurrence: number | null; share: number | null }>();
   const effectiveAiCooccurrence = aiCooccurrenceBySkill.size ? aiCooccurrenceBySkill : localAi;
   const aiCooccurrenceSource: CareerEvidence["aiCooccurrenceSource"] = aiCooccurrenceBySkill.size
     ? "supabase"
     : recognizedSkills.some((skill) => localAi.has(skill)) ? "local_csv" : "none";
-  const { data: occupationCatalogRows, error: occupationCatalogError } = rankedOccupations.length
+  const { data: occupationCatalogRows, error: occupationCatalogError } = modules.has("occupation_catalog") && rankedOccupations.length
     ? await admin.from("occupation_catalog").select("subclass_code,subclass_name,occupation_name,description").in("subclass_code", rankedOccupations.slice(0, 5).map((row) => row.code)).eq("is_displayable", true)
     : { data: [], error: null };
   if (occupationCatalogError) console.warn("Occupation catalog is unavailable; using bundled occupation index", occupationCatalogError.message);
-  const effectiveOccupationCatalogRows: Row[] = occupationCatalogError || !occupationCatalogRows?.length
+  const effectiveOccupationCatalogRows: Row[] = !modules.has("occupation_catalog")
+    ? []
+    : occupationCatalogError || !occupationCatalogRows?.length
     ? localOccupationEvidence(rankedOccupations.slice(0, 5).map((row) => row.code)).map((row) => ({ subclass_code: row.subclassCode, subclass_name: row.subclassName, occupation_name: row.occupationName, description: row.description }))
     : occupationCatalogRows as Row[];
-  const { data: programRow, error: programError } = query.programKey
+  const { data: programRow, error: programError } = query.programKey && needsCurriculum
     ? await admin.from("major_programs").select("program_key,school,cohort,college,major,training_objectives,ability_requirements,core_courses,program_features,degree_summary").eq("program_key", query.programKey).maybeSingle()
     : { data: null, error: null };
   if (programError) console.warn("Program details are unavailable; using bundled curriculum index", programError.message);
-  if (query.programKey && (programError || !programRow) && !localProgram.program) localProgram = localProgramEvidence(query.programKey);
-  const effectiveProgramRow: Row | null = programError || !programRow
+  if (query.programKey && needsCurriculum && (programError || !programRow) && !localProgram.program) localProgram = localProgramEvidence(query.programKey);
+  const effectiveProgramRow: Row | null = !needsCurriculum
+    ? null
+    : programError || !programRow
     ? localProgram.program ? {
         program_key: localProgram.program.programKey,
         school: localProgram.program.school,
@@ -250,9 +268,9 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery): Promise<
       } : null
     : programRow as Row;
   const cities = rankCities(((cityRows ?? []) as Row[]), recognizedSkills, query.cities);
-  const nextSkills = recommendNextSkills(mappedPairs, recognizedSkills, (pairs ?? []) as Row[]);
+  const nextSkills = modules.has("next_skills") ? recommendNextSkills(mappedPairs, recognizedSkills, (pairs ?? []) as Row[]) : [];
   const preferenceNotes = buildPreferenceNotes((profiles ?? []) as Row[], query);
-  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows) };
+  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules) };
 }
 
 function groupOccupationDetails(rows: Row[]) {

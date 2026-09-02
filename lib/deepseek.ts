@@ -1,4 +1,6 @@
 import { env, type DeepSeekThinkingMode } from "@/lib/env";
+import { CAREER_PLANNER_PROMPT, parseCareerQueryPlan, type CareerQueryPlan } from "@/lib/career-plan";
+import type { ParsedCareerQuery } from "@/types/career";
 
 interface DeepSeekResponse {
   choices?: Array<{ message?: { content?: string | null } }>;
@@ -7,11 +9,11 @@ interface DeepSeekResponse {
 export type DeepSeekMessage = { role: "system" | "user"; content: string };
 export interface CareerAdvisorOutput { answer: string; suggestedQuestions: string[] }
 
-export function buildDeepSeekPayload(model: string, messages: DeepSeekMessage[], thinkingMode: DeepSeekThinkingMode) {
+export function buildDeepSeekPayload(model: string, messages: DeepSeekMessage[], thinkingMode: DeepSeekThinkingMode, maxTokens = 6000) {
   return {
     model,
     messages,
-    max_tokens: 6000,
+    max_tokens: maxTokens,
     stream: false,
     thinking: { type: thinkingMode }
   };
@@ -38,6 +40,11 @@ export const CAREER_ADVISOR_SYSTEM_PROMPT = `
 “我下一步具体应该做什么？”
 
 回答必须以“职业决策建议”为中心，而不是以“数据完整性”为中心。
+
+检索证据中的 queryPlan 表示本轮问题的回答方式和按需调用的数据模块。必须围绕 queryPlan.focus 回答：
+- route 为 adaptive 时，根据原问题自由组织答案，不得套用固定的“职业推荐—原因—下一步”模板；比较问题就直接比较，AI任务问题就直接区分辅助任务、替代压力和应强化能力，概念问题就直接解释。
+- route 为 standard 时，可以使用稳定结构，但仍须删去与问题无关的职业、城市和指标。
+- queryPlan 没有选择的模块通常意味着本轮不需要展开，不得要求用户自行重新检索这些数据。
 
 
 【一、最高原则：建议优先】
@@ -90,6 +97,8 @@ export const CAREER_ADVISOR_SYSTEM_PROMPT = `
 - 不能因为两个技能听起来合理就声称其市场前景更好。
 
 如果证据不足以支持一个明确判断，应直接说明“目前证据不足以判断”，不要用泛泛常识填补。
+
+可以使用一般职业知识解释概念、工作任务和能力差异，但必须与招聘数据事实明确区分。一般知识不能被写成职向量的数据结论，也不能补造工资、需求、增长率和城市排名。若用户比较的某一项尚未进入标准技能库，应照常回答其概念和能力差异，同时明确说明无法对该项进行完全对等的量化比较，不能让整轮问题失败。
 
 
 【三、区分用户真实技能与培养方案推断能力】
@@ -380,6 +389,8 @@ AI 暴露较高不等于职业会被替代。若暴露度和需求证据同时�
 
 使用自然、直接、克制的简体中文。
 
+可以使用简洁的Markdown加粗、短标题和列表来突出结论，但不要把Markdown符号转义成反斜杠形式，不要使用代码块或复杂表格。
+
 像一个熟悉就业数据、愿意明确给判断的职业顾问与用户交流。
 
 不要像：
@@ -484,13 +495,23 @@ export function parseCareerAdvisorOutput(content: string): CareerAdvisorOutput {
       suggestedQuestions = [];
     }
   }
+  const visibleAnswer = content
+    .replace(/\s*<suggested_questions>[\s\S]*?<\/suggested_questions>\s*/gi, "")
+    .replace(/\\([*_`#])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return {
-    answer: content.replace(/\s*<suggested_questions>[\s\S]*?<\/suggested_questions>\s*/gi, "").trim(),
+    answer: visibleAnswer,
     suggestedQuestions
   };
 }
 
-async function complete(model: string, messages: DeepSeekMessage[], timeoutMs = env.deepseekAnswerTimeoutMs()): Promise<string> {
+async function complete(
+  model: string,
+  messages: DeepSeekMessage[],
+  options: { timeoutMs?: number; thinkingMode?: DeepSeekThinkingMode; maxTokens?: number } = {}
+): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? env.deepseekAnswerTimeoutMs();
   let response: Response;
   try {
     response = await fetch("https://api.deepseek.com/chat/completions", {
@@ -500,7 +521,7 @@ async function complete(model: string, messages: DeepSeekMessage[], timeoutMs = 
         Authorization: `Bearer ${env.deepseekApiKey()}`
       },
       signal: AbortSignal.timeout(timeoutMs),
-      body: JSON.stringify(buildDeepSeekPayload(model, messages, env.deepseekThinkingMode()))
+      body: JSON.stringify(buildDeepSeekPayload(model, messages, options.thinkingMode ?? env.deepseekThinkingMode(), options.maxTokens ?? 6000))
     });
   } catch (error) {
     if (error instanceof Error && error.name === "TimeoutError") {
@@ -529,8 +550,21 @@ export function buildCareerAdvisorMessages(question: string, evidence: object): 
   ];
 }
 
+export async function planCareerQuestion(question: string, query: ParsedCareerQuery): Promise<CareerQueryPlan> {
+  try {
+    const content = await complete(env.deepseekAnswerModel(), [
+      { role: "system", content: CAREER_PLANNER_PROMPT },
+      { role: "user", content: `用户问题：${question}\n已识别结构：${JSON.stringify(query)}` }
+    ], { timeoutMs: 6_000, thinkingMode: "disabled", maxTokens: 500 });
+    return parseCareerQueryPlan(content, question, query);
+  } catch (error) {
+    console.warn("DeepSeek evidence planning failed; using deterministic plan", error instanceof Error ? error.message : String(error));
+    return parseCareerQueryPlan("", question, query);
+  }
+}
+
 export async function writeCareerAnswer(question: string, evidence: object): Promise<CareerAdvisorOutput> {
-  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence));
+  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 42_000) });
   const output = parseCareerAdvisorOutput(content);
   return { ...output, answer: limitCareerAnswer(output.answer) };
 }

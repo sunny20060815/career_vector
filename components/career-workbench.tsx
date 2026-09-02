@@ -361,7 +361,39 @@ function MessageBlock({ message, showSuggestions, onSuggestedQuestion }: { messa
     return () => mm.revert();
   }, []);
   if (message.role === "user") return <div ref={ref as React.RefObject<HTMLDivElement>} className="ml-auto max-w-3xl border border-[#255c85] bg-[#0e3157] px-4 py-3"><p className="text-[10px] font-semibold tracking-[0.14em] text-[#5097d2]">你的问题</p><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[#dbe3e9]">{message.content}</p></div>;
-  return <article ref={ref as React.RefObject<HTMLElement>} className="max-w-4xl border-l-2 border-[#d98560] bg-[#0a2545] px-5 py-5"><div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.16em] text-[#d98c68]"><MessageSquareText size={14} />职业规划建议</div><p className="mt-3 whitespace-pre-wrap text-sm leading-8 text-[#c5d2dc]">{message.content}</p>{message.evidence && <Evidence evidence={message.evidence} />}{showSuggestions && message.suggestedQuestions?.length ? <div className="mt-5 border-t border-[#1d4d74] pt-4"><p className="flex items-center gap-2 text-[11px] font-medium tracking-[0.08em] text-[#62a2d7]"><Sparkles size={13} />你可能还想问</p><div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">{message.suggestedQuestions.map((question) => <button key={question} onClick={() => onSuggestedQuestion(question)} className="group flex min-h-10 w-full items-center justify-between gap-3 border border-[#255c85] bg-[#0d2b4e] px-3 py-2.5 text-left text-xs leading-5 text-[#a9bccb] transition hover:border-[#458eca] hover:text-white sm:w-auto" type="button"><span>{question}</span><ChevronRight size={13} className="shrink-0 text-[#496276] transition group-hover:translate-x-0.5 group-hover:text-[#60a4db]" /></button>)}</div></div> : null}</article>;
+  return <article ref={ref as React.RefObject<HTMLElement>} className="max-w-4xl border-l-2 border-[#d98560] bg-[#0a2545] px-5 py-5"><div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.16em] text-[#d98c68]"><MessageSquareText size={14} />职业规划建议</div><AnswerContent content={message.content} />{message.evidence && <Evidence evidence={message.evidence} />}{showSuggestions && message.suggestedQuestions?.length ? <div className="mt-5 border-t border-[#1d4d74] pt-4"><p className="flex items-center gap-2 text-[11px] font-medium tracking-[0.08em] text-[#62a2d7]"><Sparkles size={13} />你可能还想问</p><div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">{message.suggestedQuestions.map((question) => <button key={question} onClick={() => onSuggestedQuestion(question)} className="group flex min-h-10 w-full items-center justify-between gap-3 border border-[#255c85] bg-[#0d2b4e] px-3 py-2.5 text-left text-xs leading-5 text-[#a9bccb] transition hover:border-[#458eca] hover:text-white sm:w-auto" type="button"><span>{question}</span><ChevronRight size={13} className="shrink-0 text-[#496276] transition group-hover:translate-x-0.5 group-hover:text-[#60a4db]" /></button>)}</div></div> : null}</article>;
+}
+
+const answerSectionTitles = new Set(["建议", "为什么", "下一步", "直接判断", "比较结果", "数据依据", "AI影响", "应强化的能力", "课程学习建议", "学习顺序", "课程外补充", "AI辅助方式"]);
+
+function renderInlineMarkdown(value: string) {
+  const parts = value.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)]+\))/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={`${part}-${index}`} className="font-semibold text-[#eef3f7]">{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={`${part}-${index}`} className="bg-[#12375a] px-1.5 py-0.5 font-mono text-xs text-[#82b9e4]">{part.slice(1, -1)}</code>;
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+    if (link) return <a key={`${part}-${index}`} href={link[2]} target="_blank" rel="noreferrer" className="text-[#69ade2] underline decoration-[#376d96] underline-offset-4 hover:text-white">{link[1]}</a>;
+    return part;
+  });
+}
+
+function AnswerContent({ content }: { content: string }) {
+  const normalized = content
+    .replace(/\\([*_`#])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const blocks = normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  return <div className="mt-3 space-y-2 text-sm leading-8 text-[#c5d2dc]">{blocks.map((line, index) => {
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) return <h3 key={`${line}-${index}`} className="pt-2 text-sm font-semibold text-[#e8edf2] first:pt-0">{renderInlineMarkdown(heading[2])}</h3>;
+    const strongHeading = line.match(/^\*\*([^*]+)\*\*[:：]?$/);
+    if (strongHeading || answerSectionTitles.has(line.replace(/[：:]$/, ""))) return <h3 key={`${line}-${index}`} className="pt-2 text-sm font-semibold text-[#e8edf2] first:pt-0">{strongHeading ? strongHeading[1] : line.replace(/[：:]$/, "")}</h3>;
+    const numbered = line.match(/^(\d+)[.、]\s*(.+)$/);
+    if (numbered) return <div key={`${line}-${index}`} className="grid grid-cols-[20px_minmax(0,1fr)] gap-2"><span className="font-mono text-xs text-[#579bd3]">{numbered[1]}.</span><p>{renderInlineMarkdown(numbered[2])}</p></div>;
+    const bullet = line.match(/^[-*+]\s+(.+)$/);
+    if (bullet) return <div key={`${line}-${index}`} className="grid grid-cols-[10px_minmax(0,1fr)] gap-2"><span className="pt-px text-[#579bd3]">•</span><p>{renderInlineMarkdown(bullet[1])}</p></div>;
+    return <p key={`${line}-${index}`}>{renderInlineMarkdown(line)}</p>;
+  })}</div>;
 }
 
 function ThinkingIndicator({ progress, preview }: { progress: ChatProgress | null; preview: EvidencePreview | null }) {

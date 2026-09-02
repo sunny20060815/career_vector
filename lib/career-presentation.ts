@@ -10,15 +10,20 @@ export interface EvidencePreview {
 }
 
 export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview {
-  const sources = ["skills", "occupation_skill_stats", "city_skill_forecasts", "skill_pairs"];
-  if (evidence.observedPairs.length) sources.push("pair_occupation_stats");
+  const selected = new Set(evidence.queriedModules ?? ["skill_profiles", "occupations", "cities", "skill_pairs"]);
+  const sources: string[] = [];
+  if (selected.has("skill_profiles")) sources.push("skills");
+  if (selected.has("occupations")) sources.push("occupation_skill_stats");
+  if (selected.has("cities")) sources.push("city_skill_forecasts");
+  if (selected.has("skill_pairs") || selected.has("next_skills")) sources.push("skill_pairs");
+  if (evidence.observedPairs.length && selected.has("occupations")) sources.push("pair_occupation_stats");
   if (evidence.curriculum) sources.push("major_programs", "major_skills");
   if (evidence.occupationDetails?.length) sources.push("occupation_catalog");
   if (evidence.aiExposureDetails.length) sources.push("skill_ai_exposure");
   if (evidence.aiCooccurrenceSource === "supabase") sources.push("ai_skill_cooccurrence");
   if (evidence.aiCooccurrenceSource === "local_csv") sources.push("ai_skill_cooccurrence（本地索引兜底）");
   return {
-    sources,
+    sources: Array.from(new Set(sources)),
     skills: evidence.recognizedSkills.slice(0, 5),
     occupations: evidence.occupations.slice(0, 3).map((item) => item.name),
     cities: evidence.cities.slice(0, 3).map((item) => item.city),
@@ -103,6 +108,77 @@ function profileSentence(profile: Record<string, unknown>, forecastYear: number)
   return `${profileName(profile)}：${facts.join("，") || "现有指标不足以支持进一步判断"}。`;
 }
 
+function formatAiTaskFallback(evidence: CareerEvidence): string {
+  const confirmed = new Set(evidence.confirmedSkills ?? evidence.recognizedSkills);
+  const profiles = evidence.profiles.filter((profile) => confirmed.has(String(profile.skill || profile.displayName || "")));
+  const names = Array.from(confirmed);
+  const financeContext = names.some((skill) => /财务|会计|审计|预算|Excel|报表/.test(skill));
+  const strongestAiProfile = profiles
+    .map((profile) => ({ profile, exposure: numberValue(profile, "aiExposure"), cooccurrence: numberValue(profile, "aiCooccurrence") }))
+    .sort((left, right) => (right.exposure ?? 0) - (left.exposure ?? 0))[0];
+  const evidenceLine = strongestAiProfile ? (() => {
+    const name = profileName(strongestAiProfile.profile);
+    const group = String(strongestAiProfile.profile.aiGroup || "").trim();
+    const facts = [
+      strongestAiProfile.exposure !== null && strongestAiProfile.exposure > 0 ? `关联职业AI暴露度约${strongestAiProfile.exposure.toFixed(1)}` : "",
+      group,
+      strongestAiProfile.cooccurrence !== null && Math.abs(strongestAiProfile.cooccurrence) >= 0.01 ? `与AI技能的共现强度为${strongestAiProfile.cooccurrence.toFixed(3)}` : ""
+    ].filter(Boolean).join("，");
+    return facts ? `${name}的${facts}。这些指标反映任务受到AI影响或与AI共同进入岗位要求的程度，不能直接解释为岗位被替代的概率。` : "";
+  })() : "";
+  const primaryOccupation = evidence.occupations.find((occupation) => occupation.matchedSkills.some((skill) => confirmed.has(skill)))?.name;
+
+  return [
+    "**判断**",
+    `对${names.join("和") || "你提到的能力"}而言，AI更可能先替代或压缩其中高度标准化、重复执行的环节，同时强化对专业判断、结果复核和业务解释的要求，而不是一次性替代整个${primaryOccupation ? `${primaryOccupation}方向` : "岗位"}。`,
+    evidenceLine,
+    "**AI更适合辅助的任务**",
+    financeContext
+      ? "- 表格清洗、格式转换、公式与脚本草拟、标准报表初稿、重复性核对和异常项初筛。"
+      : "- 结构化信息整理、文本与代码草拟、重复性数据处理、初步分析和结果摘要。",
+    "**应重点强化的能力**",
+    financeContext
+      ? "- 财务口径与业务逻辑判断、数据质量核验、模型假设解释、风险识别，以及对最终结论承担复核责任。"
+      : "- 领域问题定义、数据质量判断、方法选择、结果核验、沟通决策和最终责任。",
+    "**下一步**",
+    `1. 用${names.slice(0, 2).join("和") || "现有技能"}完成一个包含“AI初步处理—人工校验—业务解释”的项目，把人机分工过程作为作品集证据。`,
+    `2. 面向${primaryOccupation || "目标职业"}重点证明你能发现AI输出中的口径错误、数据异常和解释偏差，而不仅是会调用AI工具。`
+  ].filter(Boolean).join("\n\n");
+}
+
+function comparisonTerms(question: string): string[] {
+  const match = question.match(/([^，。！？?]{2,24}?)(?:和|与|还是)([^，。！？?]{2,32})/);
+  if (!match) return [];
+  return [match[1], match[2]]
+    .map((term) => term.replace(/^(?:请问|我想知道|帮我比较|比较)/, "").replace(/(?:在)?就业上.*$/, "").replace(/(?:哪个|哪一个|哪项|谁|更值得).*$/, "").trim())
+    .filter(Boolean);
+}
+
+function formatComparisonFallback(evidence: CareerEvidence, question: string): string {
+  const profiles = evidence.profiles.slice().sort((left, right) => (numberValue(right, "demandPer10k2025") ?? 0) - (numberValue(left, "demandPer10k2025") ?? 0));
+  const terms = comparisonTerms(question);
+  const leading = profiles[0];
+  const recognizedNames = new Set(profiles.map(profileName));
+  const unsupported = terms.filter((term) => !Array.from(recognizedNames).some((name) => term.includes(name) || name.includes(term)));
+  if (!leading) {
+    return `**比较结果**\n\n目前技能库尚未检索到${terms.join("和") || "这两个选项"}的独立市场指标，因此不能给出可靠的量化优先级。你可以补充目标职业或发展方向，系统再从职业所需能力而不是单项技能指标进行比较。`;
+  }
+  const leadingName = profileName(leading);
+  const limitedComparison = unsupported.length
+    ? `平台目前没有把${unsupported.join("、")}作为独立标准技能统计，因此下面的结论是“可量化招聘证据”上的优先级，而不是对两者全部学习价值的完全比较。`
+    : "两项技能均有可比的招聘市场指标，下面按岗位需求、工资和预测趋势判断。";
+  return [
+    "**比较结果**",
+    `如果以就业市场中的直接岗位信号为标准，我会优先投入${leadingName}。${limitedComparison}`,
+    "**数据依据**",
+    ...profiles.slice(0, 2).map((profile) => `- ${profileSentence(profile, evidence.forecastYear)}`),
+    "**怎么组合投入**",
+    unsupported.length
+      ? `${unsupported[0]}可以作为专业分析或方法基础，${leadingName}则更适合转化为招聘中可识别、可展示的工具能力。实际学习中不必二选一，但求职作品应优先让${leadingName}形成可验证成果。`
+      : `先围绕需求信号更强的${leadingName}形成一个完整项目，再把另一项技能用于增强问题定义、分析方法或应用场景。`
+  ].join("\n\n");
+}
+
 function isMeaningfulPair(pair: CareerEvidence["observedPairs"][number]): boolean {
   const hasEvidenceLevel = Boolean(pair.evidenceLevel && !["暂无", "无"].includes(pair.evidenceLevel.trim()));
   const significantWage = pair.wageComplementPValue !== null
@@ -147,6 +223,8 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
 }
 
 export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = ""): string {
+  if (evidence.queryPlan?.answerStyle === "ai_tasks") return formatAiTaskFallback(evidence);
+  if (evidence.queryPlan?.answerStyle === "comparison") return formatComparisonFallback(evidence, question);
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
   if (curriculum && /课程学习|学习建议|学习规划|课程.*怎么|课程.*如何/.test(question)) return formatCurriculumLearningAnswer(evidence, curriculum);
   const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;

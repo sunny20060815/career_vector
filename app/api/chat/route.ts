@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer, formatNoDataCareerAnswer } from "@/lib/career-presentation";
 import { encodeChatStreamEvent } from "@/lib/chat-stream";
-import { writeCareerAnswer } from "@/lib/deepseek";
+import { planCareerQuestion, writeCareerAnswer } from "@/lib/deepseek";
 import { parseCareerQuestionFromCatalog, retrieveCareerEvidence } from "@/lib/evidence";
 import { mergeCareerQueryContext } from "@/lib/query";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -63,8 +63,9 @@ export async function POST(request: Request) {
           if (userMessageError) throw new Error("无法保存提问");
 
           const query = mergeCareerQueryContext(await parseCareerQuestionFromCatalog(question), previousQuery);
-          emit({ type: "status", payload: { stage: "searching", message: "正在从招聘聚合数据中匹配岗位、城市和趋势..." } });
-          const evidence = await retrieveCareerEvidence(query);
+          const queryPlan = await planCareerQuestion(question, query);
+          emit({ type: "status", payload: { stage: "searching", message: "正在按问题调用相关职业、技能与趋势数据..." } });
+          const evidence = await retrieveCareerEvidence(query, queryPlan);
           const preview = buildEvidencePreview(evidence);
           emit({ type: "evidence", payload: { preview } });
 

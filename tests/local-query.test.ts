@@ -6,7 +6,11 @@ import { mergeCareerQueryContext } from "@/lib/query";
 const catalog = [
   { canonicalName: "Python", aliases: ["python", "Python 编程"] },
   { canonicalName: "沟通能力", aliases: ["沟通", "沟通能力"] },
-  { canonicalName: "药学", aliases: ["药学", "药物学"] }
+  { canonicalName: "药学", aliases: ["药学", "药物学"] },
+  { canonicalName: "财务分析", aliases: ["财务分析"] },
+  { canonicalName: "Excel", aliases: ["Excel"] },
+  { canonicalName: "人工智能技术", aliases: ["AI", "人工智能"] },
+  { canonicalName: "机器学习", aliases: ["机器学习"] }
 ];
 
 describe("parseCareerQuestionLocally", () => {
@@ -50,6 +54,21 @@ describe("parseCareerQuestionLocally", () => {
       school: "首都经济贸易大学",
       cohort: "2024级",
       major: "经济学（实验班）"
+    });
+  });
+
+  it("does not mistake AI as a confirmed skill in an AI impact question", () => {
+    expect(parseCareerQuestionLocally("我会财务分析和 Excel，AI 更可能辅助还是替代哪些工作任务？", catalog)).toMatchObject({
+      skills: ["财务分析", "Excel"],
+      confirmedSkills: ["财务分析", "Excel"]
+    });
+  });
+
+  it("routes skill investment comparisons without claiming the compared skill is mastered", () => {
+    expect(parseCareerQuestionLocally("计量经济学和机器学习在就业上哪个更值得优先投入？", catalog)).toMatchObject({
+      skills: ["机器学习"],
+      confirmedSkills: [],
+      intent: "job_comparison"
     });
   });
 });

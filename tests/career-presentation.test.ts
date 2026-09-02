@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { buildEvidencePreview, buildSuggestedQuestions, formatFallbackCareerAnswer, formatNoDataCareerAnswer } from "@/lib/career-presentation";
+import { fallbackCareerPlan } from "@/lib/career-plan";
+import { parseCareerQuestionLocally } from "@/lib/local-query";
 import type { CareerEvidence } from "@/lib/evidence";
 
 const evidence: CareerEvidence = {
@@ -103,5 +105,46 @@ describe("career presentation", () => {
     expect(answer).toContain("统计学、计量经济学、经济预测");
     expect(answer).toContain("课程外补充");
     expect(answer).toContain("AI辅助方式");
+  });
+
+  it("keeps AI task questions focused when the model fallback is used", () => {
+    const question = "我会财务分析和 Excel，AI 更可能辅助还是替代哪些工作任务？";
+    const query = parseCareerQuestionLocally(question, [
+      { canonicalName: "财务分析", aliases: ["财务分析"] },
+      { canonicalName: "Excel", aliases: ["Excel"] },
+      { canonicalName: "人工智能技术", aliases: ["AI"] }
+    ]);
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      recognizedSkills: ["财务分析", "Excel"],
+      confirmedSkills: ["财务分析", "Excel"],
+      inferredSkills: [],
+      curriculum: null,
+      profiles: [{ displayName: "Excel", skill: "Excel", aiExposure: 70.5, aiGroup: "高AI渗透率", aiCooccurrence: -0.071 }],
+      queryPlan: fallbackCareerPlan(question, query)
+    }, question);
+
+    expect(answer).toContain("AI更适合辅助的任务");
+    expect(answer).toContain("表格清洗");
+    expect(answer).toContain("财务口径与业务逻辑判断");
+    expect(answer).not.toContain("优先考虑数字技术工程技术人员");
+  });
+
+  it("compares available skill evidence without failing on an unindexed course", () => {
+    const question = "计量经济学和机器学习在就业上哪个更值得优先投入？";
+    const query = parseCareerQuestionLocally(question, [{ canonicalName: "机器学习", aliases: ["机器学习"] }]);
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      recognizedSkills: ["机器学习"],
+      confirmedSkills: [],
+      inferredSkills: [],
+      curriculum: null,
+      profiles: [{ displayName: "机器学习", skill: "机器学习", demandPer10k2025: 60.6, salaryMedian2025: 21500, forecast: { trend: "明显上升" } }],
+      queryPlan: fallbackCareerPlan(question, query)
+    }, question);
+
+    expect(answer).toContain("优先投入机器学习");
+    expect(answer).toContain("没有把计量经济学作为独立标准技能统计");
+    expect(answer).toContain("2025年需求强度约60.6个/万岗位");
   });
 });

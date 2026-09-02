@@ -39,11 +39,27 @@ function extractSalary(question: string): number | null {
 }
 
 function extractIntent(question: string): QueryIntent {
-  if (/适合|岗位|职业|工作|转行|想去|去哪/.test(question)) return "career_recommendation";
+  if (/对比|比较|相比|区别|哪个|哪一个|哪项|孰优|还是.+更|更值得/.test(question)) return "job_comparison";
   if (/下一步|补什么|学习|提升/.test(question)) return "skill_growth";
   if (/城市|哪里|哪座/.test(question)) return "city_recommendation";
-  if (/对比|比较/.test(question)) return "job_comparison";
+  if (/适合|岗位|职业|工作|转行|想去|去哪/.test(question)) return "career_recommendation";
   return "skill_trend";
+}
+
+function isGenericAiImpactQuestion(question: string): boolean {
+  return /(?:AI|人工智能).{0,12}(?:辅助|替代|影响|冲击|暴露|渗透)/i.test(question)
+    && !/(?:会|掌握|熟悉|使用过|擅长|具备|学习|学过).{0,10}(?:AI|人工智能)|(?:AI|人工智能)(?:技术|开发|应用|工程|技能)/i.test(question);
+}
+
+function extractConfirmedSkills(question: string, matched: Array<{ canonicalName: string; aliases: readonly string[] }>): string[] {
+  const segments = Array.from(question.matchAll(/(?:我|本人)?(?:会|掌握|熟悉|使用过|擅长|具备|技能(?:有|包括|是))\s*([^，,。！？；;\n]+)/g), (match) => normalise(match[1]));
+  const confirmed = matched.filter((entry) => segments.some((segment) => [entry.canonicalName, ...entry.aliases].some((alias) => {
+    const token = normalise(alias);
+    return token.length > 1 && segment.includes(token);
+  }))).map((entry) => entry.canonicalName);
+  if (confirmed.length) return confirmed;
+  const isPlainSkillList = question.length <= 80 && !/[？?]|哪个|哪项|值得|趋势|需求|工资|薪资|辅助|替代|影响|适合|应该/.test(question);
+  return isPlainSkillList ? matched.map((entry) => entry.canonicalName) : [];
 }
 
 export function parseCareerQuestionLocally(
@@ -52,9 +68,15 @@ export function parseCareerQuestionLocally(
   programs: readonly LocalProgramCatalogEntry[] = []
 ): ParsedCareerQuery {
   const normalisedQuestion = normalise(question);
-  const skills = catalog
+  const genericAiImpactQuestion = isGenericAiImpactQuestion(question);
+  const matchedSkills = catalog
     .map((entry) => ({
       canonicalName: entry.canonicalName,
+      aliases: entry.aliases,
+      matchIndex: Math.min(...[entry.canonicalName, ...entry.aliases].map((alias) => {
+        const token = normalise(alias);
+        return token.length > 1 ? normalisedQuestion.indexOf(token) : -1;
+      }).filter((index) => index >= 0)),
       longestMatchedAlias: Math.max(
         0,
         ...[entry.canonicalName, ...entry.aliases].map((alias) => {
@@ -63,10 +85,12 @@ export function parseCareerQuestionLocally(
         })
       )
     }))
-    .filter((entry) => entry.longestMatchedAlias > 0)
-    .sort((left, right) => normalisedQuestion.indexOf(normalise(left.canonicalName)) - normalisedQuestion.indexOf(normalise(right.canonicalName)))
+    .filter((entry) => entry.longestMatchedAlias > 0 && !(genericAiImpactQuestion && entry.canonicalName === "人工智能技术"))
+    .sort((left, right) => left.matchIndex - right.matchIndex);
+  const skills = matchedSkills
     .map((entry) => entry.canonicalName)
     .slice(0, 12);
+  const confirmedSkills = extractConfirmedSkills(question, matchedSkills).slice(0, 12);
   const cities = KNOWN_CITIES.filter((city) => question.includes(city));
   const salary = extractSalary(question);
   const forecastYear = ([2028, 2027, 2026] as const).find((year) => question.includes(String(year))) ?? 2028;
@@ -84,6 +108,7 @@ export function parseCareerQuestionLocally(
 
   return {
     skills,
+    confirmedSkills,
     occupationKeywords: [],
     cities,
     salaryMinYuan: salary,
