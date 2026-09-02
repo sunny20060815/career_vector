@@ -2,46 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  --surface-page: #1f2a38;
+  --surface-sidebar: #243243;
+  --surface-canvas: #202d3d;
+  --surface-raised: #2a3a4d;
+  --border-slate: #496077;
+  --accent-blue: #58a6e7;
+  --accent-blue-soft: #254c70;
+  --text-main: #e8edf4;
+}
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
   min-width: 320px;
-  color: #e8f1ed;
-  background: #060b0c;
+  color: var(--text-main);
+  background: var(--surface-page);
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 button, textarea, input { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 
-::selection { color: #f7faf7; background: #257565; }
+::selection { color: #f5f7fa; background: #315f8b; }
 
 .app-shell {
-  background-color: #060b0c;
+  background-color: var(--surface-page);
   background-image:
-    linear-gradient(rgba(78, 221, 189, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(78, 221, 189, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(88, 166, 231, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 166, 231, 0.045) 1px, transparent 1px);
   background-size: 34px 34px;
 }
 
 * {
-  scrollbar-color: #24443e #091211;
+  scrollbar-color: #526f8d #243243;
   scrollbar-width: thin;
 }
 
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: #091211; }
-*::-webkit-scrollbar-thumb { background: #24443e; border: 2px solid #091211; }
+*::-webkit-scrollbar-track { background: #243243; }
+*::-webkit-scrollbar-thumb { background: #526f8d; border: 2px solid #243243; }
 
 .status-dot {
   display: inline-block;
   width: 7px;
   height: 7px;
-  background: #4eddbd;
-  box-shadow: 0 0 0 3px rgba(78, 221, 189, 0.12);
+  background: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(88, 166, 231, 0.14);
   animation: signal-pulse 2.1s ease-in-out infinite;
 }
 
@@ -49,7 +59,7 @@ button { -webkit-tap-highlight-color: transparent; }
   position: absolute;
   font-size: 9px;
   letter-spacing: 0.16em;
-  color: #4f756c;
+  color: #7e96af;
 }
 
 .matrix-line,
@@ -58,7 +68,7 @@ button { -webkit-tap-highlight-color: transparent; }
   left: 17%;
   top: 57%;
   height: 1px;
-  background: rgba(72, 201, 174, 0.32);
+  background: rgba(88, 166, 231, 0.38);
   transform-origin: left center;
 }
 
@@ -73,7 +83,7 @@ button { -webkit-tap-highlight-color: transparent; }
   gap: 6px;
   font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.09em;
-  color: #698c83;
+  color: #8ba1b8;
 }
 
 .matrix-node b,
@@ -81,12 +91,12 @@ button { -webkit-tap-highlight-color: transparent; }
   display: block;
   width: 6px;
   height: 6px;
-  border: 1px solid #60dfc3;
-  background: #153a32;
-  box-shadow: 0 0 12px rgba(78, 221, 189, 0.28);
+  border: 1px solid #72b9f2;
+  background: #254c70;
+  box-shadow: 0 0 12px rgba(88, 166, 231, 0.3);
 }
 
-.matrix-node-1 { left: 13%; top: 53%; color: #70e4cb; }
+.matrix-node-1 { left: 13%; top: 53%; color: #83c9fa; }
 .matrix-node-2 { left: 39%; top: 25%; }
 .matrix-node-3 { left: 67%; top: 31%; }
 .matrix-node-4 { left: 74%; top: 66%; }
@@ -106,8 +116,8 @@ button { -webkit-tap-highlight-color: transparent; }
   top: 0;
   width: 1px;
   height: 100%;
-  background: rgba(78, 221, 189, 0.42);
-  box-shadow: 0 0 18px rgba(78, 221, 189, 0.38);
+  background: rgba(88, 166, 231, 0.48);
+  box-shadow: 0 0 18px rgba(88, 166, 231, 0.42);
   animation: scan-grid 4.8s linear infinite;
 }
 
@@ -118,7 +128,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 @keyframes signal-pulse {
-  50% { opacity: 0.48; box-shadow: 0 0 0 5px rgba(78, 221, 189, 0.04); }
+  50% { opacity: 0.48; box-shadow: 0 0 0 5px rgba(88, 166, 231, 0.06); }
 }
 
 @keyframes scan-grid {
