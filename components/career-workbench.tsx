@@ -1,15 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, BookOpen, BrainCircuit, ChevronRight, CircleCheck, Clock3, Database, LogOut, Mail, MailCheck, MessageSquareText, MessageSquareWarning, Plus, Radar, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowUp, BookOpen, BrainCircuit, ChevronRight, CircleCheck, Clock3, Database, LogOut, MessageSquareText, MessageSquareWarning, Plus, Radar, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
 import gsap from "gsap";
 
 import { DataMethods } from "@/components/data-methods";
 import { FeedbackPanel } from "@/components/feedback-panel";
 import { SkillGlobe } from "@/components/skill-globe";
-import { formatOtpSendError } from "@/lib/auth-error";
-import { getEmailRedirectUrl } from "@/lib/auth-redirect";
-import { getSessionEmail } from "@/lib/auth-session";
+import { getSessionIdentity } from "@/lib/auth-session";
 import { buildEvidencePreview, buildSuggestedQuestions, type EvidencePreview } from "@/lib/career-presentation";
 import { decodeChatStream } from "@/lib/chat-stream";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
@@ -28,14 +26,12 @@ const examples = [
 
 const thinkingPhrases = ["正在理解您的经历", "正在匹配职业与城市", "正在分析技能组合", "正在为您生成职业规划"];
 const localPreview = process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_LOCAL_PREVIEW === "true";
+const phoneAuthBaseUrl = "https://zhivectone-auth-vrsbhqbyuj.ap-southeast-1.fcapp.run";
 
 export function CareerWorkbench() {
   const [activeView, setActiveView] = useState<"planner" | "methods" | "feedback">("planner");
-  const [email, setEmail] = useState("");
-  const [linkSent, setLinkSent] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-  const [authError, setAuthError] = useState("");
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userIdentity, setUserIdentity] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<ChatProgress | null>(null);
@@ -51,34 +47,34 @@ export function CareerWorkbench() {
 
   useEffect(() => {
     if (localPreview) {
-      setUserEmail("本地预览模式");
+      setUserIdentity("本地预览模式");
       setAuthChecked(true);
       return;
     }
     const supabase = createBrowserSupabaseClient();
     void supabase.auth.getSession().then(({ data }) => {
-      const sessionEmail = getSessionEmail(data.session);
-      setUserEmail(sessionEmail);
+      const identity = getSessionIdentity(data.session);
+      setUserIdentity(identity);
       setAuthChecked(true);
-      if (sessionEmail) void loadConversations();
+      if (identity) void loadConversations();
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const sessionEmail = getSessionEmail(session);
-      setUserEmail(sessionEmail);
+      const identity = getSessionIdentity(session);
+      setUserIdentity(identity);
       setAuthChecked(true);
-      if (sessionEmail) void loadConversations();
+      if (identity) void loadConversations();
     });
     return () => subscription.unsubscribe();
   }, []);
 
   useLayoutEffect(() => {
-    if (!userEmail || messages.length || !introRef.current) return;
+    if (!userIdentity || messages.length || !introRef.current) return;
     const mm = gsap.matchMedia();
     mm.add("(prefers-reduced-motion: no-preference)", () => {
       gsap.fromTo(introRef.current!.querySelectorAll(".intro-unit"), { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.65, ease: "power2.out", stagger: 0.07 });
     });
     return () => mm.revert();
-  }, [userEmail, messages.length]);
+  }, [userIdentity, messages.length]);
 
   useEffect(() => {
     const scroll = scrollRef.current;
@@ -112,19 +108,9 @@ export function CareerWorkbench() {
     setActiveView("planner");
   }
 
-  async function sendMagicLink(event: FormEvent) {
-    event.preventDefault();
-    setAuthError("");
-    const { error: signInError } = await createBrowserSupabaseClient().auth.signInWithOtp({ email, options: { emailRedirectTo: getEmailRedirectUrl(window.location.origin) } });
-    if (signInError) return setAuthError(formatOtpSendError(signInError.message));
-    setLinkSent(true);
-  }
-
   async function signOut() {
     await createBrowserSupabaseClient().auth.signOut();
-    setUserEmail(null);
-    setLinkSent(false);
-    setEmail("");
+    setUserIdentity(null);
     setConversations([]);
     setMessages([]);
     setConversationId(undefined);
@@ -133,7 +119,7 @@ export function CareerWorkbench() {
   async function sendQuestion(rawQuestion: string) {
     const submitted = rawQuestion.trim();
     if (!submitted || loading) return;
-    if (!userEmail) return setError("请先登录后再提交职业咨询。");
+    if (!userIdentity) return setError("请先登录后再提交职业咨询。");
     setLoading(true);
     setProgress({ stage: "understanding", message: "正在识别技能与求职偏好..." });
     setPreview(null);
@@ -199,7 +185,7 @@ export function CareerWorkbench() {
               {conversations.length > 7 && <button onClick={() => setHistoryExpanded((value) => !value)} className="mt-2 flex h-9 items-center justify-center gap-1 border border-[#1a2536] text-xs text-[#5f809b] transition hover:border-[#31495c] hover:text-[#b4c4d1]" type="button">{historyExpanded ? "收起历史记录" : `展开其余 ${conversations.length - 7} 条`}<ChevronRight size={13} className={`transition ${historyExpanded ? "-rotate-90" : "rotate-90"}`} /></button>}
             </div>
           </div>
-          <div className="border-t border-[#172232] p-4"><div className="flex items-center gap-2 text-xs text-[#6989a3]"><CircleCheck size={14} className="text-[#428ecd]" /><span className="truncate">{userEmail ?? "等待登录"}</span></div>{userEmail && <button onClick={() => void signOut()} className="mt-3 flex items-center gap-2 text-xs text-[#b98573] transition hover:text-[#ef9b7e]" type="button"><LogOut size={13} />退出登录</button>}</div>
+          <div className="border-t border-[#172232] p-4"><div className="flex items-center gap-2 text-xs text-[#6989a3]"><CircleCheck size={14} className="text-[#428ecd]" /><span className="truncate">{userIdentity ?? "等待登录"}</span></div>{userIdentity && <button onClick={() => void signOut()} className="mt-3 flex items-center gap-2 text-xs text-[#b98573] transition hover:text-[#ef9b7e]" type="button"><LogOut size={13} />退出登录</button>}</div>
         </aside>
 
         <section className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#080b10]">
@@ -224,10 +210,10 @@ export function CareerWorkbench() {
             </form>
             {error && <p className="pointer-events-auto mx-auto mt-2 max-w-5xl border-l-2 border-[#e07c58] bg-[#251511] px-3 py-2 text-xs text-[#efaa90]">{error}</p>}
             </div>
-          </> : activeView === "methods" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><DataMethods /></div> : <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><FeedbackPanel userEmail={userEmail} /></div>}
+          </> : activeView === "methods" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><DataMethods /></div> : <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><FeedbackPanel userIdentity={userIdentity} /></div>}
         </section>
       </div>
-      {authChecked && !userEmail && <LoginOverlay email={email} error={authError} linkSent={linkSent} onEmail={setEmail} onSend={sendMagicLink} onReset={() => { setLinkSent(false); setAuthError(""); }} />}
+      {authChecked && !userIdentity && <LoginOverlay />}
     </main>
   );
 }
@@ -244,9 +230,23 @@ function Intro({ containerRef, onExample }: { containerRef: React.RefObject<HTML
   return <div ref={containerRef} className="mx-auto flex min-h-[calc(100vh-18rem)] max-w-6xl flex-col justify-center py-8"><div className="grid items-end gap-10 lg:grid-cols-[minmax(0,1fr)_360px]"><div><p className="intro-unit text-xs font-semibold tracking-[0.2em] text-[#4594d5]">LABOR MARKET SIGNAL SYSTEM</p><h1 className="intro-unit mt-4 max-w-3xl font-serif text-3xl leading-tight text-white md:text-4xl lg:text-[44px]">把专业、技能与真实岗位需求连接起来</h1><p className="intro-unit mt-4 max-w-2xl text-sm leading-7 text-[#7f9ab0]">输入你的年级、专业、技能或求职偏好。职向量会从招聘数据中匹配职业方向、工资前景、城市机会与下一项能力投资。</p><p className="intro-unit mt-5 max-w-3xl border-l-2 border-[#e58b62] bg-[#0c121b] px-4 py-3 text-sm leading-6 text-[#a6b9c8]">首都经济贸易大学23、24、25级学生可输入年级和专业，结合对应培养方案进行供需匹配。例如：首经贸2024级经济学（实验班）。</p></div><SignalMatrix /></div><div className="mt-10 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{examples.map((example) => { const Icon = example.icon; return <button key={example.title} onClick={() => onExample(example.text)} type="button" className="intro-unit group min-h-48 border border-[#1a2536] bg-[#0a0f16] p-4 text-left transition hover:border-[#3c80b8] hover:bg-[#0e141e]"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center border border-[#284258] text-[#519ad5]"><Icon size={16} /></span><ChevronRight className="text-[#42596b] transition group-hover:translate-x-1 group-hover:text-[#65a9e1]" size={15} /></div><p className="mt-4 text-sm font-semibold text-[#e2e8ed]">{example.title}</p><p className="mt-2 line-clamp-3 text-xs leading-5 text-[#6f8da6]">{example.text}</p><p className="mt-3 text-[10px] tracking-[0.08em] text-[#b17860]">{example.note}</p></button>; })}</div></div>;
 }
 
-function LoginOverlay({ email, error, linkSent, onEmail, onSend, onReset }: { email: string; error: string; linkSent: boolean; onEmail: (value: string) => void; onSend: (event: FormEvent) => Promise<void>; onReset: () => void }) {
+function LoginOverlay() {
   const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [challenge, setChallenge] = useState("");
+  const [stage, setStage] = useState<"phone" | "code">("phone");
+  const [cooldown, setCooldown] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = window.setInterval(() => setCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldown]);
+
   useLayoutEffect(() => {
     if (!overlayRef.current || !panelRef.current) return;
     const mm = gsap.matchMedia();
@@ -257,7 +257,93 @@ function LoginOverlay({ email, error, linkSent, onEmail, onSend, onReset }: { em
     });
     return () => mm.revert();
   }, []);
-  return <div ref={overlayRef} className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#030507]/95 p-4 backdrop-blur-md"><div ref={panelRef} className="grid w-full max-w-4xl overflow-hidden border border-[#283b4b] bg-[#090d12] shadow-[0_28px_100px_rgba(0, 0, 0,0.65)] md:grid-cols-[0.9fr_1.1fr]"><div className="relative hidden min-h-[520px] overflow-hidden border-r border-[#1d2a3e] bg-[#070b10] p-8 md:block"><div className="login-unit"><Brand /></div><div className="login-unit mt-16"><p className="text-xs tracking-[0.18em] text-[#428ecd]">YOUR CAREER, IN SIGNALS</p><h2 className="mt-4 font-serif text-3xl leading-tight text-white">从专业培养<br />走向真实市场</h2><p className="mt-4 text-sm leading-7 text-[#708fa8]">854万余条招聘信息，连接技能、职业、城市与人工智能影响。</p></div><LoginMatrix /></div><div className="flex min-h-[460px] flex-col justify-center p-6 sm:p-10 md:p-12">{!linkSent ? <><p className="login-unit text-xs font-semibold tracking-[0.2em] text-[#4594d5]">SECURE ACCESS</p><h2 className="login-unit mt-4 font-serif text-3xl text-white">登录职向量</h2><p className="login-unit mt-3 text-sm leading-6 text-[#7391a9]">输入邮箱获取免密登录链接。无需设置密码，点击邮件中的确认链接即可进入。</p><form onSubmit={(event) => void onSend(event)} className="login-unit mt-8"><label htmlFor="login-email" className="text-xs font-medium text-[#87a1b6]">邮箱地址</label><div className="mt-2 flex h-12 items-center border border-[#2b3d4b] bg-[#0b1018] px-3 focus-within:border-[#4792cf]"><Mail size={17} className="mr-3 shrink-0 text-[#4c94cf]" /><input id="login-email" value={email} onChange={(event) => onEmail(event.target.value)} type="email" autoComplete="email" required placeholder="name@example.com" className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-white outline-none placeholder:text-[#42596b]" /></div><button className="mt-4 flex h-12 w-full items-center justify-center gap-2 bg-[#3b85c2] text-sm font-semibold text-[#040a12] transition hover:bg-[#64a8df]" type="submit">发送登录链接<ArrowUp className="rotate-45" size={16} /></button></form>{error && <p className="login-unit mt-3 border-l-2 border-[#e07c58] bg-[#241511] px-3 py-2 text-xs leading-5 text-[#efaa90]">{error}</p>}<p className="login-unit mt-7 text-[11px] leading-5 text-[#486176]">登录即表示你同意仅将咨询记录用于本账户的职业规划服务。</p></> : <div className="login-unit"><span className="grid h-12 w-12 place-items-center border border-[#3b85c2] bg-[#0e192a] text-[#62aae4]"><MailCheck size={24} /></span><p className="mt-6 text-xs font-semibold tracking-[0.2em] text-[#4594d5]">CHECK YOUR INBOX</p><h2 className="mt-4 font-serif text-3xl text-white">确认链接已发送</h2><p className="mt-4 text-sm leading-7 text-[#7f9ab1]">请前往 <span className="text-[#d7dfe6]">{email}</span>，点击邮件中的确认链接。验证完成后将自动返回职向量。</p><p className="mt-5 border-l-2 border-[#d98560] bg-[#0f151f] px-3 py-2 text-xs leading-5 text-[#92a9bc]">没有收到？请检查垃圾邮件，或等待一分钟后重新发送。</p><button onClick={onReset} className="mt-7 flex items-center gap-2 text-sm text-[#63a3d8] transition hover:text-[#91c2ea]" type="button"><ArrowLeft size={15} />更换邮箱或重新发送</button></div>}</div></div></div>;
+
+  async function sendCode(event: FormEvent) {
+    event.preventDefault();
+    if (submitting || cooldown) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const challengeResponse = await fetch("/api/auth/phone/challenge", { method: "POST" });
+      const challengePayload = await challengeResponse.json() as { challenge?: string; error?: string };
+      if (!challengeResponse.ok || !challengePayload.challenge) throw new Error(challengePayload.error ?? "无法初始化登录");
+      const sendResponse = await fetch(`${phoneAuthBaseUrl}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone })
+      });
+      const sendPayload = await sendResponse.json() as { error?: string };
+      if (!sendResponse.ok) throw new Error(sendPayload.error ?? "验证码发送失败");
+      setChallenge(challengePayload.challenge);
+      setStage("code");
+      setCooldown(60);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "验证码发送失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function verifyCode(event: FormEvent) {
+    event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const verifyResponse = await fetch(`${phoneAuthBaseUrl}/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code, challenge })
+      });
+      const verifyPayload = await verifyResponse.json() as { assertion?: string; error?: string };
+      if (!verifyResponse.ok || !verifyPayload.assertion) throw new Error(verifyPayload.error ?? "验证码核验失败");
+      const exchangeResponse = await fetch("/api/auth/phone/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assertion: verifyPayload.assertion })
+      });
+      const exchangePayload = await exchangeResponse.json() as { error?: string };
+      if (!exchangeResponse.ok) throw new Error(exchangePayload.error ?? "登录失败");
+      window.location.reload();
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : "验证码核验失败");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div ref={overlayRef} className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#030507]/95 p-4 backdrop-blur-md">
+      <div ref={panelRef} className="grid w-full max-w-4xl overflow-hidden border border-[#283b4b] bg-[#090d12] shadow-[0_28px_100px_rgba(0,0,0,0.65)] md:grid-cols-[0.9fr_1.1fr]">
+        <div className="relative hidden min-h-[520px] overflow-hidden border-r border-[#1d2a3e] bg-[#070b10] p-8 md:block">
+          <div className="login-unit"><Brand /></div>
+          <div className="login-unit mt-16"><p className="text-xs tracking-[0.18em] text-[#428ecd]">YOUR CAREER, IN SIGNALS</p><h2 className="mt-4 font-serif text-3xl leading-tight text-white">从专业培养<br />走向真实市场</h2><p className="mt-4 text-sm leading-7 text-[#708fa8]">854万余条招聘信息，连接技能、职业、城市与人工智能影响。</p></div>
+          <LoginMatrix />
+        </div>
+        <div className="flex min-h-[460px] flex-col justify-center p-6 sm:p-10 md:p-12">
+          <p className="login-unit text-xs font-semibold tracking-[0.2em] text-[#4594d5]">SECURE ACCESS</p>
+          <h2 className="login-unit mt-4 font-serif text-3xl text-white">手机号登录</h2>
+          <p className="login-unit mt-3 text-sm leading-6 text-[#7391a9]">使用短信验证码登录职向量，无需设置密码。</p>
+          {stage === "phone" ? (
+            <form onSubmit={(event) => void sendCode(event)} className="login-unit mt-8">
+              <label htmlFor="login-phone" className="text-xs font-medium text-[#87a1b6]">手机号码</label>
+              <div className="mt-2 flex h-12 items-center border border-[#2b3d4b] bg-[#0b1018] px-3 focus-within:border-[#4792cf]"><Smartphone size={17} className="mr-3 shrink-0 text-[#4c94cf]" /><span className="mr-2 text-sm text-[#7692a8]">+86</span><input id="login-phone" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))} type="tel" inputMode="numeric" autoComplete="tel" required pattern="1[3-9][0-9]{9}" placeholder="请输入11位手机号" className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-white outline-none placeholder:text-[#42596b]" /></div>
+              <button disabled={submitting || phone.length !== 11} className="mt-4 flex h-12 w-full items-center justify-center gap-2 bg-[#3b85c2] text-sm font-semibold text-[#040a12] transition hover:bg-[#64a8df] disabled:cursor-not-allowed disabled:bg-[#26333d] disabled:text-[#526e85]" type="submit">{submitting ? "正在发送…" : "获取验证码"}<ArrowUp className="rotate-45" size={16} /></button>
+            </form>
+          ) : (
+            <form onSubmit={(event) => void verifyCode(event)} className="login-unit mt-8">
+              <div className="flex items-center justify-between text-xs"><span className="text-[#87a1b6]">验证码已发送至 +86 {phone.slice(0, 3)}****{phone.slice(-4)}</span><button type="button" onClick={() => { setStage("phone"); setCode(""); setError(""); }} className="flex items-center gap-1 text-[#63a3d8]"><ArrowLeft size={13} />更换号码</button></div>
+              <label htmlFor="login-code" className="mt-5 block text-xs font-medium text-[#87a1b6]">短信验证码</label>
+              <div className="mt-2 flex h-12 items-center border border-[#2b3d4b] bg-[#0b1018] px-3 focus-within:border-[#4792cf]"><ShieldCheck size={17} className="mr-3 shrink-0 text-[#4c94cf]" /><input id="login-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))} type="text" inputMode="numeric" autoComplete="one-time-code" required autoFocus placeholder="请输入短信验证码" className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-white outline-none placeholder:text-[#42596b]" /></div>
+              <button disabled={submitting || code.length < 4} className="mt-4 flex h-12 w-full items-center justify-center gap-2 bg-[#3b85c2] text-sm font-semibold text-[#040a12] transition hover:bg-[#64a8df] disabled:cursor-not-allowed disabled:bg-[#26333d] disabled:text-[#526e85]" type="submit">{submitting ? "正在登录…" : "验证并登录"}</button>
+              <button disabled={submitting || cooldown > 0} onClick={(event) => void sendCode(event)} type="button" className="mt-4 w-full text-center text-xs text-[#63a3d8] disabled:text-[#486176]">{cooldown > 0 ? `${cooldown}秒后可重新发送` : "重新发送验证码"}</button>
+            </form>
+          )}
+          {error && <p className="login-unit mt-3 border-l-2 border-[#e07c58] bg-[#241511] px-3 py-2 text-xs leading-5 text-[#efaa90]">{error}</p>}
+          <p className="login-unit mt-7 text-[11px] leading-5 text-[#486176]">登录即表示你同意将咨询记录与该账号关联，用于保存职业规划历史。</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SignalMatrix() {

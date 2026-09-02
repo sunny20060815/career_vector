@@ -6,7 +6,7 @@ import gsap from "gsap";
 
 import { feedbackCategories, type FeedbackCategory } from "@/lib/feedback";
 
-export function FeedbackPanel({ userEmail }: { userEmail: string | null }) {
+export function FeedbackPanel({ userIdentity }: { userIdentity: string | null }) {
   const [category, setCategory] = useState<FeedbackCategory>("suggestion");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +46,7 @@ export function FeedbackPanel({ userEmail }: { userEmail: string | null }) {
   }
 
   if (sent) {
-    return <div ref={rootRef} className="mx-auto flex min-h-[calc(100vh-12rem)] max-w-3xl items-center justify-center py-10"><div className="feedback-unit w-full border border-[#283e50] bg-[#0b1017] p-7 md:p-10"><span className="grid h-12 w-12 place-items-center border border-[#428cc9] bg-[#0c1829] text-[#67aae0]"><Check size={24} /></span><h1 className="mt-6 font-serif text-3xl text-white">反馈已发送</h1><p className="mt-3 text-sm leading-7 text-[#829db3]">感谢你的反馈。我们会通过登录邮箱 <span className="text-[#c8d4dd]">{userEmail}</span> 与你联系。</p><button onClick={() => setSent(false)} type="button" className="mt-7 text-sm text-[#64a4d8] transition hover:text-[#94c3ea]">继续提交问题</button></div></div>;
+    return <div ref={rootRef} className="mx-auto flex min-h-[calc(100vh-12rem)] max-w-3xl items-center justify-center py-10"><div className="feedback-unit w-full border border-[#283e50] bg-[#0b1017] p-7 md:p-10"><span className="grid h-12 w-12 place-items-center border border-[#428cc9] bg-[#0c1829] text-[#67aae0]"><Check size={24} /></span><h1 className="mt-6 font-serif text-3xl text-white">反馈已发送</h1><p className="mt-3 text-sm leading-7 text-[#829db3]">感谢你的反馈，项目团队已收到该问题。</p><button onClick={() => setSent(false)} type="button" className="mt-7 text-sm text-[#64a4d8] transition hover:text-[#94c3ea]">继续提交问题</button></div></div>;
   }
 
   return (
@@ -55,7 +55,7 @@ export function FeedbackPanel({ userEmail }: { userEmail: string | null }) {
         <p className="text-xs font-semibold tracking-[0.2em] text-[#4594d5]">PRODUCT FEEDBACK</p>
         <h1 className="mt-4 font-serif text-3xl leading-tight text-white md:text-4xl">帮助我们把职向量做得更准确</h1>
         <p className="mt-4 text-sm leading-7 text-[#809bb1]">如果你发现数据、职业匹配或页面功能存在问题，或者对产品有新的想法，请在这里告诉我们。反馈将直接发送给项目团队。</p>
-        <div className="mt-6 border-l-2 border-[#d98560] bg-[#0d131b] px-4 py-3 text-xs leading-6 text-[#829db3]">当前登录邮箱：<span className="text-[#d1dae3]">{userEmail}</span><br />我们可能通过该邮箱与你确认问题细节。</div>
+        <div className="mt-6 border-l-2 border-[#d98560] bg-[#0d131b] px-4 py-3 text-xs leading-6 text-[#829db3]">当前登录账号：<span className="text-[#d1dae3]">{userIdentity}</span><br />反馈将与该账号关联，便于后续核查。</div>
       </section>
 
       <form onSubmit={(event) => void submit(event)} className="feedback-unit border border-[#253847] bg-[#0a0e15] p-5 md:p-7">
