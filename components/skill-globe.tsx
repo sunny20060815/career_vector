@@ -8,22 +8,30 @@ const SKILL_COUNT = 830;
 const CLUSTER_COUNT = 22;
 const GLOBE_RADIUS = 1.18;
 const FEATURED_SKILLS = [
-  { name: "人工智能", index: 90 },
-  { name: "Python", index: 133 },
-  { name: "数据分析", index: 176 },
-  { name: "质量管理", index: 219 },
-  { name: "工业自动化", index: 262 },
-  { name: "软件测试", index: 305 },
-  { name: "网络安全", index: 348 },
-  { name: "云计算", index: 391 },
-  { name: "机械设计", index: 434 },
-  { name: "供应链管理", index: 477 },
-  { name: "沟通能力", index: 520 },
-  { name: "项目管理", index: 563 },
-  { name: "财务管理", index: 606 },
-  { name: "风险管理", index: 649 },
-  { name: "医药研发", index: 692 },
-  { name: "统计分析", index: 735 }
+  { name: "人工智能", index: 539 },
+  { name: "Python", index: 7 },
+  { name: "数据分析", index: 786 },
+  { name: "SQL", index: 302 },
+  { name: "质量管理", index: 752 },
+  { name: "工业自动化", index: 702 },
+  { name: "软件测试", index: 361 },
+  { name: "网络安全", index: 97 },
+  { name: "云计算", index: 459 },
+  { name: "机器学习", index: 676 },
+  { name: "机械设计", index: 189 },
+  { name: "电气控制", index: 805 },
+  { name: "生产工艺", index: 334 },
+  { name: "供应链管理", index: 251 },
+  { name: "沟通能力", index: 570 },
+  { name: "团队合作", index: 424 },
+  { name: "项目管理", index: 397 },
+  { name: "财务管理", index: 165 },
+  { name: "风险管理", index: 493 },
+  { name: "金融分析", index: 231 },
+  { name: "医药研发", index: 650 },
+  { name: "统计分析", index: 120 },
+  { name: "视觉设计", index: 613 },
+  { name: "学习能力", index: 60 }
 ];
 
 function buildSkillPositions() {
@@ -114,9 +122,10 @@ function createLabelTexture(name: string) {
   return texture;
 }
 
-export function SkillGlobe() {
+export function SkillGlobe({ variant = "default" }: { variant?: "default" | "login" }) {
   const panelRef = useRef<HTMLElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
+  const compact = variant === "login";
 
   useLayoutEffect(() => {
     if (!panelRef.current) return;
@@ -142,7 +151,7 @@ export function SkillGlobe() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    camera.position.set(0, 0, 3.55);
+    camera.position.set(0, 0, compact ? 3.75 : 3.55);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setClearColor(0x000000, 0);
@@ -159,6 +168,7 @@ export function SkillGlobe() {
     const labelTextures: THREE.CanvasTexture[] = [];
     const labelMaterials: THREE.SpriteMaterial[] = [];
     const labelSprites: THREE.Sprite[] = [];
+    const labelEligible = FEATURED_SKILLS.map(() => true);
     const skillGeometry = new THREE.BufferGeometry();
     skillGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const skillMaterial = new THREE.PointsMaterial({
@@ -233,7 +243,7 @@ export function SkillGlobe() {
       });
       const label = new THREE.Sprite(material);
       label.position.copy(points[skill.index]).multiplyScalar(1.075);
-      label.scale.set(Math.max(0.42, skill.name.length * 0.105 + 0.2), 0.15, 1);
+      label.scale.set(Math.max(0.4, skill.name.length * 0.1 + 0.18), compact ? 0.13 : 0.145, 1);
       label.center.set(0.05, 0.5);
       label.renderOrder = 3;
       globe.add(label);
@@ -259,17 +269,38 @@ export function SkillGlobe() {
       renderer.setSize(width, height, true);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      labelSprites.forEach((label, index) => { label.visible = width >= 400 || index % 2 === 0; });
+      const labelStep = compact ? (width >= 280 ? 1 : 2) : (width >= 320 ? 1 : 2);
+      labelEligible.forEach((_eligible, index) => { labelEligible[index] = index % labelStep === 0; });
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     resize();
 
     let animationFrame = 0;
+    const worldPosition = new THREE.Vector3();
+    const projectedPosition = new THREE.Vector3();
     const render = () => {
       if (!reducedMotion.matches) globe.rotation.y += 0.0018;
       globe.rotation.x += ((-0.16 - pointerTarget.y) - globe.rotation.x) * 0.035;
       globe.rotation.z += ((0.08 + pointerTarget.x) - globe.rotation.z) * 0.025;
+      globe.updateMatrixWorld(true);
+      const occupied: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+      labelSprites.forEach((label, index) => {
+        label.getWorldPosition(worldPosition);
+        if (!labelEligible[index] || worldPosition.z < 0.08) {
+          label.visible = false;
+          return;
+        }
+        projectedPosition.copy(worldPosition).project(camera);
+        const x = (projectedPosition.x * 0.5 + 0.5) * host.clientWidth;
+        const y = (-projectedPosition.y * 0.5 + 0.5) * host.clientHeight;
+        const halfWidth = Math.max(24, FEATURED_SKILLS[index].name.length * (compact ? 5 : 6) + 10);
+        const box = { left: x - halfWidth, right: x + halfWidth, top: y - 9, bottom: y + 9 };
+        const outsideCopyArea = y < 32 || y > host.clientHeight - (compact ? 30 : 42);
+        const overlaps = occupied.some((item) => box.left < item.right + 5 && box.right > item.left - 5 && box.top < item.bottom + 4 && box.bottom > item.top - 4);
+        label.visible = !outsideCopyArea && !overlaps;
+        if (label.visible) occupied.push(box);
+      });
       renderer.render(scene, camera);
       animationFrame = window.requestAnimationFrame(render);
     };
@@ -296,18 +327,18 @@ export function SkillGlobe() {
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, []);
+  }, [compact]);
 
   return (
-    <section ref={panelRef} className="intro-unit skill-globe relative h-60 overflow-hidden border border-[#23466f] sm:h-64 lg:h-60" aria-label="技能共现网络三维动态图">
+    <section ref={panelRef} className={`${compact ? "h-44" : "intro-unit h-60 sm:h-64 lg:h-60"} skill-globe relative overflow-hidden border border-[#23466f]`} aria-label="技能共现网络三维动态图">
       <div className="globe-copy pointer-events-none absolute inset-x-4 top-3 z-10 flex items-center justify-between sm:inset-x-5 sm:top-4">
-        <span className="font-mono text-[9px] tracking-[0.16em] text-[#83bdea]">SKILL CO-OCCURRENCE GLOBE</span>
+        <span className="font-mono text-[9px] tracking-[0.16em] text-[#83bdea]">{compact ? "SKILL GRAPH" : "SKILL CO-OCCURRENCE GLOBE"}</span>
         <span className="flex items-center gap-2 text-[9px] tracking-[0.12em] text-[#789bbd]"><i className="globe-live-dot" />LIVE</span>
       </div>
       <div ref={canvasHostRef} className="absolute inset-0" />
       <div className="globe-copy pointer-events-none absolute inset-x-4 bottom-3 z-10 flex items-end justify-between gap-3 sm:inset-x-5 sm:bottom-4">
-        <div><p className="text-[10px] tracking-[0.1em] text-[#c5dcf1]">830项标准化技能 · 22个技能簇</p><p className="mt-1 text-[9px] text-[#6585a6]">每个光点代表一项技能或专业知识</p></div>
-        <p className="max-w-32 text-right text-[9px] leading-4 text-[#6585a6]">浅蓝连线表示技能共现关系</p>
+        <div><p className="text-[10px] tracking-[0.1em] text-[#c5dcf1]">830项标准化技能 · 22个技能簇</p>{!compact && <p className="mt-1 text-[9px] text-[#6585a6]">每个光点代表一项技能或专业知识</p>}</div>
+        {!compact && <p className="max-w-32 text-right text-[9px] leading-4 text-[#6585a6]">浅蓝连线表示技能共现关系</p>}
       </div>
     </section>
   );

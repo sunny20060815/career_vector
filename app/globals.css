@@ -55,15 +55,6 @@ button { -webkit-tap-highlight-color: transparent; }
   animation: signal-pulse 2.1s ease-in-out infinite;
 }
 
-.login-beam {
-  position: absolute;
-  left: 17%;
-  top: 57%;
-  height: 1px;
-  background: rgba(88, 166, 231, 0.38);
-  transform-origin: left center;
-}
-
 .skill-globe {
   isolation: isolate;
   background-color: #213b58;
@@ -97,32 +88,6 @@ button { -webkit-tap-highlight-color: transparent; }
   animation: signal-pulse 2.1s ease-in-out infinite;
 }
 
-.login-node {
-  display: block;
-  width: 7px;
-  height: 7px;
-  border: 1px solid #6bc7ff;
-  background: #163a67;
-  box-shadow: 0 0 12px rgba(88, 182, 255, 0.42);
-}
-
-.login-node { position: absolute; }
-.login-beam { left: 18%; top: 68%; }
-.beam-a { width: 56%; transform: rotate(-31deg); }
-.beam-b { width: 67%; transform: rotate(-8deg); }
-.beam-c { width: 73%; transform: rotate(3deg); background: rgba(215, 129, 91, 0.26); }
-
-.login-scan {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1px;
-  height: 100%;
-  background: rgba(88, 166, 231, 0.48);
-  box-shadow: 0 0 18px rgba(88, 166, 231, 0.42);
-  animation: scan-grid 4.8s linear infinite;
-}
-
 .thinking-bar { transform-origin: bottom; }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
@@ -131,11 +96,6 @@ button { -webkit-tap-highlight-color: transparent; }
 
 @keyframes signal-pulse {
   50% { opacity: 0.48; box-shadow: 0 0 0 5px rgba(88, 166, 231, 0.06); }
-}
-
-@keyframes scan-grid {
-  from { left: 0; }
-  to { left: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

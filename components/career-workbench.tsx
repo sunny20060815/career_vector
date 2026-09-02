@@ -317,7 +317,7 @@ function LoginOverlay() {
         <div className="relative hidden min-h-[520px] overflow-hidden border-r border-[#4b637b] bg-[#202d3d] p-8 md:block">
           <div className="login-unit"><Brand /></div>
           <div className="login-unit mt-16"><p className="text-xs tracking-[0.18em] text-[#428ecd]">YOUR CAREER, IN SIGNALS</p><h2 className="mt-4 font-serif text-3xl leading-tight text-white">从专业培养<br />走向真实市场</h2><p className="mt-4 text-sm leading-7 text-[#708fa8]">854万余条招聘信息，连接技能、职业、城市与人工智能影响。</p></div>
-          <LoginMatrix />
+          <div className="login-unit absolute inset-x-8 bottom-8"><SkillGlobe variant="login" /></div>
         </div>
         <div className="flex min-h-[460px] flex-col justify-center p-6 sm:p-10 md:p-12">
           <p className="login-unit text-xs font-semibold tracking-[0.2em] text-[#4594d5]">SECURE ACCESS</p>
@@ -348,10 +348,6 @@ function LoginOverlay() {
 
 function SignalMatrix() {
   return <SkillGlobe />;
-}
-
-function LoginMatrix() {
-  return <div className="login-unit login-matrix absolute inset-x-8 bottom-8 h-40 border border-[#435a71]" aria-hidden="true"><span className="absolute left-3 top-3 text-[9px] tracking-[0.16em] text-[#455d71]">MATCHING SIGNAL</span>{[18, 36, 54, 72, 86].map((left, index) => <i key={left} className="login-node" style={{ left: `${left}%`, top: `${[66, 32, 52, 25, 70][index]}%` }} />)}<i className="login-beam beam-a" /><i className="login-beam beam-b" /><i className="login-beam beam-c" /><i className="login-scan" /></div>;
 }
 
 function MessageBlock({ message, showSuggestions, onSuggestedQuestion }: { message: UiMessage; showSuggestions: boolean; onSuggestedQuestion: (value: string) => void }) {
