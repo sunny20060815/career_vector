@@ -66,11 +66,12 @@ export function normaliseSkillToken(value: string): string {
 
 export function mergeCareerQueryContext(current: ParsedCareerQuery, previous?: ParsedCareerQuery | null): ParsedCareerQuery {
   if (!previous) return current;
+  const hasCurrentOccupationTarget = current.occupationKeywords.length > 0 || Boolean(current.occupationCandidates?.length);
   return {
     ...current,
     skills: Array.from(new Set([...previous.skills, ...current.skills])).slice(0, 12),
     confirmedSkills: Array.from(new Set([...(previous.confirmedSkills ?? previous.skills), ...(current.confirmedSkills ?? [])])).slice(0, 12),
-    occupationKeywords: Array.from(new Set([...previous.occupationKeywords, ...current.occupationKeywords])).slice(0, 12),
+    occupationKeywords: hasCurrentOccupationTarget ? current.occupationKeywords : previous.occupationKeywords,
     occupationCandidates: current.occupationCandidates?.length ? current.occupationCandidates : previous.occupationCandidates,
     cities: current.cities.length ? current.cities : previous.cities,
     salaryMinYuan: current.salaryMinYuan ?? previous.salaryMinYuan,

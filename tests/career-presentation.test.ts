@@ -204,6 +204,8 @@ describe("career presentation", () => {
     expect(answer).toContain("优先验证数据库技术、数据分析、Linux");
     expect(answer).toContain("课程外补充");
     expect(answer).toContain("AI辅助方式");
+    expect(answer).toContain("关联职业AI暴露度约72.4");
+    expect(answer).toContain("与AI技能的共现强度为0.540");
   });
 
   it("keeps an explicit cross-major target above broad destination priors", () => {

@@ -71,6 +71,23 @@ describe("parseCareerQuestionLocally", () => {
     });
   });
 
+  it("replaces an old occupation when the current turn states a new target", () => {
+    const previous = parseCareerQuestionLocally(
+      "我想进入会计专业人员方向",
+      catalog,
+      [],
+      [{ subclassName: "会计专业人员", aliases: ["会计"] }]
+    );
+    const current = parseCareerQuestionLocally(
+      "我现在想进入AI技术相关职业",
+      [{ canonicalName: "人工智能技术", aliases: ["AI"] }],
+      [],
+      [{ subclassName: "数字技术工程技术人员", aliases: ["人工智能工程技术人员"] }]
+    );
+
+    expect(mergeCareerQueryContext(current, previous).occupationKeywords).toEqual(["数字技术工程技术人员"]);
+  });
+
   it("does not mistake AI as a confirmed skill in an AI impact question", () => {
     expect(parseCareerQuestionLocally("我会财务分析和 Excel，AI 更可能辅助还是替代哪些工作任务？", catalog)).toMatchObject({
       skills: ["财务分析", "Excel"],

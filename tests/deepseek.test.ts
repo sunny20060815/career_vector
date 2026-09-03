@@ -75,6 +75,7 @@ describe("buildDeepSeekPayload", () => {
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("只规定本轮必须覆盖的决策内容，不是固定模板");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得为了覆盖上述内容机械使用相同的小标题或句式");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("targetOccupationSkills");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得只给泛化的“AI辅助方式”");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("700-1100 个汉字");
   });
 
@@ -116,5 +117,19 @@ describe("buildDeepSeekPayload", () => {
       `${"培养方案中的计量和统计课程为经济分析提供基础，但课程覆盖不等于已经掌握。".repeat(8)}专业就业去向显示财务分析较常见，因此可优先考虑会计专业人员，并用Python增强数据处理。`,
       evidence
     )).toBe(true);
+  });
+
+  it("rejects AI-related program advice that omits available exposure or cooccurrence evidence", () => {
+    const evidence = {
+      curriculum: { major: "经济统计学" },
+      majorDestinations: [{ destinationName: "数据分析", occupationName: "数字技术工程技术人员" }],
+      requestedOccupations: ["数字技术工程技术人员"],
+      occupations: [{ name: "数字技术工程技术人员" }],
+      profiles: [{ skill: "Python", aiExposure: 72.4, aiCooccurrence: 0.54 }]
+    };
+    const base = `${"培养方案中的统计课程提供基础，但课程覆盖不等于已经掌握，需要转化为项目成果。".repeat(8)}依据阳光高考网就业去向资料，数字技术工程技术人员是本次明确目标。`;
+
+    expect(isAdequateIndividualCareerAnswer(base, evidence)).toBe(false);
+    expect(isAdequateIndividualCareerAnswer(`${base}Python的关联职业AI暴露度为72.4，与AI技能的共现强度为0.540。`, evidence)).toBe(true);
   });
 });

@@ -331,6 +331,8 @@ AI 暴露度、AI 渗透职业组和 AI 技能共现数据，只在它们会影�
 - 用户应重点保留和强化哪些更难完全替代的能力；
 - 如何把 AI 变成工作工具，而不是只把“会使用 AI”写成一项孤立技能。
 
+当用户明确询问AI相关职业、AI学习路径，或 queryPlan 调用了 ai_impact 时，回答不得只给泛化的“AI辅助方式”。只要证据中存在有效数值，就至少引用一项关联职业AI暴露度和一项“与AI技能的共现强度”，解释各自含义后，再据此提出人机分工与能力强化建议；没有有效数值时应明确说明证据不足，不得编造。
+
 可以基于生成式 AI 的一般能力边界作克制的任务层判断：AI通常更适合代码辅助、结构化信息处理、初步分析、文本整理和方案草拟；领域问题定义、数据质量判断、因果识别、结果核验、沟通协调和最终责任仍需要劳动者承担。必须把这些判断与用户的专业、确认技能和目标职业结合，不能机械套用。
 
 AI 暴露较高不等于职业会被替代。若暴露度和需求证据同时存在，应优先解释“任务如何调整”和“劳动者如何与 AI 协作”，不要制造失业概率。
@@ -639,6 +641,9 @@ export function isAdequateIndividualCareerAnswer(answer: string, evidence: objec
     ? record.requestedOccupations.filter((item): item is string => typeof item === "string")
     : [];
   const occupations = Array.isArray(record.occupations) ? record.occupations as Array<Record<string, unknown>> : [];
+  const profiles = Array.isArray(record.profiles) ? record.profiles as Array<Record<string, unknown>> : [];
+  const requiresAiExposure = profiles.some((profile) => typeof profile.aiExposure === "number" && profile.aiExposure > 0);
+  const requiresAiCooccurrence = profiles.some((profile) => typeof profile.aiCooccurrence === "number" && Math.abs(profile.aiCooccurrence) >= 0.01);
   const mentionsEvidenceOccupation = requestedOccupations.length
     ? requestedOccupations.some((name) => answer.includes(name))
     : occupations.length === 0 || occupations.slice(0, 3).some((row) => {
@@ -649,6 +654,8 @@ export function isAdequateIndividualCareerAnswer(answer: string, evidence: objec
     && /培养方案|课程|校内学习/.test(answer)
     && /毕业去向|就业去向|专业去向|从业方向/.test(answer)
     && /不等于|不能视为|需要.{0,12}(?:验证|转化|证明)|转化为.{0,12}(?:能力|成果)/.test(answer)
+    && (!requiresAiExposure || /AI暴露度|人工智能暴露度/.test(answer))
+    && (!requiresAiCooccurrence || /与AI技能的共现强度|AI技能共现强度/.test(answer))
     && mentionsEvidenceOccupation;
 }
 

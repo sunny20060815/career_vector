@@ -246,6 +246,36 @@ function pairSentence(pair: CareerEvidence["observedPairs"][number]): string {
   return `${pair.skillA}与${pair.skillB}已有直接组合记录，但现有证据不足以判断工资互补。`;
 }
 
+function curriculumAiSection(evidence: CareerEvidence, occupationSkills: CareerEvidence["targetOccupationSkills"]): string[] {
+  const targetSkills = new Set((occupationSkills ?? []).map((item) => item.skill));
+  const relevantProfiles = evidence.profiles.filter((profile) => targetSkills.has(profileName(profile)) || evidence.recognizedSkills.includes(profileName(profile)));
+  const exposureProfile = relevantProfiles
+    .map((profile) => ({ profile, value: numberValue(profile, "aiExposure") }))
+    .filter((item) => item.value !== null && item.value > 0)
+    .sort((left, right) => (right.value ?? 0) - (left.value ?? 0))[0];
+  const cooccurrenceProfiles = relevantProfiles
+    .map((profile) => ({ profile, value: numberValue(profile, "aiCooccurrence") }))
+    .filter((item) => item.value !== null && item.value >= 0.01)
+    .sort((left, right) => (right.value ?? 0) - (left.value ?? 0))
+    .slice(0, 2);
+  const facts = [
+    exposureProfile
+      ? `${profileName(exposureProfile.profile)}的关联职业AI暴露度约${exposureProfile.value?.toFixed(1)}${exposureProfile.profile.aiGroup ? `，属于${String(exposureProfile.profile.aiGroup)}` : ""}`
+      : "",
+    cooccurrenceProfiles.length
+      ? cooccurrenceProfiles.map((item) => `${profileName(item.profile)}与AI技能的共现强度为${item.value?.toFixed(3)}`).join("；")
+      : ""
+  ].filter(Boolean).join("；");
+  const major = String(evidence.curriculum?.major || "");
+  return [
+    "**AI影响指标与辅助方式**",
+    facts
+      ? `${facts}。AI暴露度反映相关职业任务受AI影响的潜在程度，共现强度反映技能与AI技能共同进入岗位要求的紧密程度；二者都不等同于职业被替代概率或工资溢价。`
+      : "现有证据尚不足以报告可靠的AI暴露度或技能共现数值，不据此虚构替代概率。",
+    `AI辅助方式上，可将其用于代码解释与调试、数据清洗、初步建模和结果整理；你仍应重点掌握${/经济|统计/.test(major) ? "经济与统计问题定义、数据质量判断、模型选择、因果解释" : "领域问题定义、数据质量判断、方法选择、结果解释"}和最终核验，并在项目中明确人机分工。`
+  ];
+}
+
 function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Record<string, unknown>): string {
   const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((course) => course.trim()).filter(Boolean);
   const quantitative = courses.filter((course) => /统计|计量|数学|预测|数据|编程|模型|算法|机器学习|人工智能/.test(course)).slice(0, 4);
@@ -276,8 +306,7 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
     missingSkills.length
       ? `对照目标职业技能画像，建议优先验证${missingSkills.map((item) => item.skill).join("、")}。其中先选1-2项与课程项目结合，不要把技能名单平均用力。${nextSkill && !missingSkills.some((item) => item.skill === nextSkill) ? `${nextSkill}与现有能力另有直接共现证据，可作为备选。` : ""}`
       : nextSkill ? `${nextSkill}与现有能力存在直接共现证据，可作为优先验证的补充技能。` : "现有证据不足以确定唯一的下一技能，应先把已有课程能力转化为可验证成果。",
-    "**AI辅助方式**",
-    `可以使用AI辅助资料梳理、代码解释、调试和初步结果检查；问题设定、数据质量判断、方法选择、结果解释与最终责任仍应由你完成。作品集中应明确展示AI做了什么、你如何核验，以及错误输出是怎样被发现和修正的。`
+    ...curriculumAiSection(evidence, occupationSkills)
   ].filter(Boolean).join("\n\n");
 }
 

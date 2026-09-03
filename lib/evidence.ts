@@ -268,13 +268,17 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
     : { data: [], error: null };
   if (targetOccupationError) console.warn("Target occupation skills are unavailable", targetOccupationError.message);
   let targetOccupationSkills = rankTargetOccupationSkills((targetOccupationRows ?? []) as Row[], recognizedSkills, query.forecastYear);
-  if (!recognizedSkills.length && !majorDestinations.length) {
+  if (!recognizedSkills.length && !majorDestinations.length && !targetOccupationSkills.length) {
     return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], majorDestinations, majorIdentity, curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, requestedOccupations: query.occupationKeywords };
   }
+  const profileSkillNames = Array.from(new Set([
+    ...recognizedSkills,
+    ...targetOccupationSkills.map((item) => item.skill)
+  ])).slice(0, 24);
 
   const profileFields = `canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,forecast_2026,forecast_2027,forecast_2028,fact_summary${needsAi ? ",ai_exposure,ai_group,ai_cooccurrence_npmi,ai_cooccurrence_share" : ""}`;
   const [{ data: profiles, error: profileError }, { data: occupationRows, error: occupationError }, { data: cityRows, error: cityError }, { data: pairsFromSkillA, error: pairFromSkillAError }, { data: pairsFromSkillB, error: pairFromSkillBError }] = await Promise.all([
-    needsProfiles ? admin.from("skills").select(profileFields).in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null }),
+    needsProfiles && profileSkillNames.length ? admin.from("skills").select(profileFields).in("canonical_name", profileSkillNames) : Promise.resolve({ data: [], error: null }),
     needsOccupations ? admin.from("occupation_skill_stats").select("canonical_name,occupation_code,occupation_name,probability,concentration,forecast_demand_2026,forecast_demand_2027,forecast_demand_2028").in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null }),
     needsCities ? admin.from("city_skill_forecasts").select("canonical_name,city,demand_per_10k,demand_volume_index").in("canonical_name", recognizedSkills).eq("forecast_year", query.forecastYear) : Promise.resolve({ data: [], error: null }),
     needsPairs ? admin.from("skill_pairs").select("id,skill_a,skill_b,npmi,wage_complement_pct,wage_complement_p_value,demand_rate_2025,demand_rate_2028,demand_growth_pct,evidence_level").in("skill_a", recognizedSkills) : Promise.resolve({ data: [], error: null }),
@@ -363,8 +367,8 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
     citiesAfter: rankCities([...((cityRows ?? []) as Row[]), ...((nextSkillCityRows ?? []) as Row[]).filter((row) => text(row, "canonical_name") === item.skill)], [...rankingSkills, item.skill], query.cities).map((row) => row.city)
   }));
   const [{ data: aiExposureRows, error: aiExposureError }, { data: aiCooccurrenceRows, error: aiCooccurrenceError }] = await Promise.all([
-    needsAi ? admin.from("skill_ai_exposure").select("canonical_name,ai_group,demand_share_2025,demand_share_2028").in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null }),
-    needsAi ? admin.from("ai_skill_cooccurrence").select("canonical_name,cooccurrence_npmi,historical_ai_collaboration_share").in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null })
+    needsAi && profileSkillNames.length ? admin.from("skill_ai_exposure").select("canonical_name,ai_group,demand_share_2025,demand_share_2028").in("canonical_name", profileSkillNames) : Promise.resolve({ data: [], error: null }),
+    needsAi && profileSkillNames.length ? admin.from("ai_skill_cooccurrence").select("canonical_name,cooccurrence_npmi,historical_ai_collaboration_share").in("canonical_name", profileSkillNames) : Promise.resolve({ data: [], error: null })
   ]);
   if (aiExposureError) console.warn("AI exposure detail table is unavailable; using skill profile fields", aiExposureError.message);
   if (aiCooccurrenceError) console.warn("AI cooccurrence table is unavailable; using bundled index", aiCooccurrenceError.message);
@@ -384,7 +388,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const effectiveAiCooccurrence = aiCooccurrenceBySkill.size ? aiCooccurrenceBySkill : localAi;
   const aiCooccurrenceSource: CareerEvidence["aiCooccurrenceSource"] = aiCooccurrenceBySkill.size
     ? "supabase"
-    : recognizedSkills.some((skill) => localAi.has(skill)) ? "local_csv" : "none";
+    : profileSkillNames.some((skill) => localAi.has(skill)) ? "local_csv" : "none";
   const { data: occupationCatalogRows, error: occupationCatalogError } = modules.has("occupation_catalog") && rankedOccupations.length
     ? await admin.from("occupation_catalog").select("subclass_code,subclass_name,occupation_name,description").in("subclass_code", rankedOccupations.slice(0, 5).map((row) => row.code)).eq("is_displayable", true)
     : { data: [], error: null };
