@@ -2,6 +2,8 @@ export const FORECAST_YEARS = [2026, 2027, 2028] as const;
 
 export type ForecastYear = (typeof FORECAST_YEARS)[number];
 
+export type UserAudience = "individual" | "curriculum_designer";
+
 export type QueryIntent =
   | "career_recommendation"
   | "skill_trend"

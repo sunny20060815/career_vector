@@ -59,6 +59,34 @@ describe("career presentation", () => {
     expect(answer.length).toBeLessThan(1200);
   });
 
+  it("keeps curriculum-design fallback focused on program revision", () => {
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      inferredSkills: ["统计分析", "经济预测"],
+      queryPlan: {
+        route: "adaptive",
+        answerStyle: "curriculum_design",
+        modules: ["curriculum", "skill_profiles", "occupations", "ai_impact"],
+        focus: "诊断培养方案"
+      },
+      curriculumVersions: [
+        { cohort: "2023级", skillEvidence: [{ canonical_name: "统计分析" }] },
+        { cohort: "2025级", skillEvidence: [{ canonical_name: "统计分析" }, { canonical_name: "人工智能技术" }] }
+      ],
+      targetOccupationSkills: [
+        { occupationName: "数字技术工程技术人员", skill: "统计分析", forecastDemandShare: 0.3, concentration: 1, userHasSkill: true },
+        { occupationName: "数字技术工程技术人员", skill: "Python", forecastDemandShare: 0.2, concentration: 1, userHasSkill: false }
+      ]
+    });
+
+    expect(answer).toContain("**诊断结论**");
+    expect(answer).toContain("**历年方案变化**");
+    expect(answer).toContain("人工智能技术");
+    expect(answer).toContain("**修订建议**");
+    expect(answer).toContain("不能单独决定培养方案");
+    expect(answer).not.toContain("如果以就业为目标，我会优先考虑");
+  });
+
   it("treats a program and confirmed skill statement as a comprehensive profile", () => {
     const question = "我是首经贸2024级经济学（实验班）专业的学生，我会Stata";
     const answer = formatFallbackCareerAnswer({

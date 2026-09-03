@@ -1,6 +1,6 @@
 import { env, type DeepSeekThinkingMode } from "@/lib/env";
 import { CAREER_PLANNER_PROMPT, parseCareerQueryPlan, type CareerQueryPlan } from "@/lib/career-plan";
-import type { ParsedCareerQuery } from "@/types/career";
+import type { ParsedCareerQuery, UserAudience } from "@/types/career";
 
 interface DeepSeekResponse {
   choices?: Array<{ message?: { content?: string | null } }>;
@@ -54,6 +54,24 @@ queryPlan.answerStyle 只规定本轮必须覆盖的决策内容，不是固定�
 - learning_plan：概括培养方案的训练主线，指出重点课程或课程模块、可能形成的能力、课程外缺口和可验证成果。
 - skill_growth：直接给出下一技能优先级，比较候选依据，并说明新增技能对职业、工资参照、城市选择和作品成果的影响。
 - explanation：先解释概念或机制，再说明数据口径、适用边界以及它对用户当前问题的实际意义。
+- curriculum_design：面向培养方案制定者，诊断培养目标、课程体系与技能供给，比较历年版本，并以岗位需求和未来趋势为证据提出课程修订建议。
+
+当“使用身份”为培养方案制定者时，你是高校培养方案决策支持顾问，不是学生求职顾问。必须：
+- 先概括当前方案的培养定位、课程主线和可能形成的能力供给；
+- 将课程供给与匹配职业的常用技能、需求趋势及AI影响相对照，指出覆盖优势、能力缺口和结构性重复；
+- curriculumVersions 存在时比较不同年级方案，只陈述证据中能够确认的新增、延续或弱化内容；
+- 建议必须落到“保留、强化、整合、增设实践环节或调整课程衔接”中的具体动作，并说明依据；
+- 不得为了迎合短期招聘需求机械删减理论基础课，也不得把招聘数据写成课程设置的唯一依据；
+- 明确招聘样本主要来自上市公司及集团公司，建议还需结合学科定位、师资条件和学生发展目标审议。
+
+教师端还必须遵守以下口径：
+- 使用“该专业”“培养方案”“课程供给”等表述，不得把回答写成面向某位学生的“你适合什么工作”；
+- skillEvidence 和 inferredSkills 只是从培养方案文本识别出的能力供给信号，不代表每名学生已经掌握，也不能据此直接评价教学质量；
+- targetOccupationSkills 中的 forecastDemandShare 表示该技能在目标职业岗位中的预测需求占比，不是毕业生就业概率；
+- “能力缺口”只能表述为培养方案文本尚未稳定识别或需要进一步核查，不能直接断言课程没有覆盖；
+- 不得把工作重新交给教师去招聘网站收集职位。系统已经提供的数据应由你完成比较，再指出需要教研组人工审议的事项；
+- 不得机械推荐 Office 等通用工具，也不得只罗列热门技能。AI适应性建议必须落实到课程内容、实践任务、人机分工和结果核验能力。
+- 内容应完整但避免报告式堆砌，通常控制在900—1500个汉字；标题可以随问题调整，不能为了通过要求而机械复制固定模板。
 
 如果用户只是输入“学校、年级、专业 + 我会的技能”，而没有明确提出下一技能或互补问题，应将其视为一次综合职业画像：结合培养方案概括专业训练基础，区分用户确认技能与课程推断能力，给出匹配职业、市场前景、AI影响、城市方向和后续行动。不得擅自把问题缩减成“推荐下一项技能”，也不得仅凭培养方案推断出的 Excel、Office 等通用技能主导职业建议。
 
@@ -569,31 +587,48 @@ async function complete(
   return content;
 }
 
-export function buildCareerAdvisorMessages(question: string, evidence: object): DeepSeekMessage[] {
+export function buildCareerAdvisorMessages(question: string, evidence: object, audience: UserAudience = "individual"): DeepSeekMessage[] {
   return [
     {
       role: "system",
       content: CAREER_ADVISOR_SYSTEM_PROMPT
     },
-    { role: "user", content: `原问题：${question}\n检索证据：${JSON.stringify(evidence)}` }
+    { role: "user", content: `使用身份：${audience === "curriculum_designer" ? "培养方案制定者" : "学生／求职者"}\n原问题：${question}\n检索证据：${JSON.stringify(evidence)}` }
   ];
 }
 
-export async function planCareerQuestion(question: string, query: ParsedCareerQuery): Promise<CareerQueryPlan> {
+export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: object): boolean {
+  const record = evidence as Record<string, unknown>;
+  const versions = Array.isArray(record.curriculumVersions) ? record.curriculumVersions : [];
+  const required = [
+    /培养|课程/,
+    /岗位|职业|技能|招聘/,
+    /保留|强化|整合|增设|衔接|实践|修订/,
+    /边界|样本|学科定位|师资|长期发展|不能单独|不等于/
+  ];
+  return answer.trim().length >= 500
+    && required.every((pattern) => pattern.test(answer))
+    && (versions.length < 2 || /历年|版本|变化|20(?:23|24|25)级/.test(answer));
+}
+
+export async function planCareerQuestion(question: string, query: ParsedCareerQuery, audience: UserAudience = "individual"): Promise<CareerQueryPlan> {
   try {
     const content = await complete(env.deepseekAnswerModel(), [
       { role: "system", content: CAREER_PLANNER_PROMPT },
-      { role: "user", content: `用户问题：${question}\n已识别结构：${JSON.stringify(query)}` }
+      { role: "user", content: `使用身份：${audience === "curriculum_designer" ? "培养方案制定者" : "学生／求职者"}\n用户问题：${question}\n已识别结构：${JSON.stringify(query)}` }
     ], { timeoutMs: 6_000, thinkingMode: "disabled", maxTokens: 500 });
-    return parseCareerQueryPlan(content, question, query);
+    return parseCareerQueryPlan(content, question, query, audience);
   } catch (error) {
     console.warn("DeepSeek evidence planning failed; using deterministic plan", error instanceof Error ? error.message : String(error));
-    return parseCareerQueryPlan("", question, query);
+    return parseCareerQueryPlan("", question, query, audience);
   }
 }
 
-export async function writeCareerAnswer(question: string, evidence: object): Promise<CareerAdvisorOutput> {
-  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 45_000) });
+export async function writeCareerAnswer(question: string, evidence: object, audience: UserAudience = "individual"): Promise<CareerAdvisorOutput> {
+  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence, audience), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 45_000) });
   const output = parseCareerAdvisorOutput(content);
-  return { ...output, answer: limitCareerAnswer(output.answer) };
+  if (audience === "curriculum_designer" && !isAdequateCurriculumDesignerAnswer(output.answer, evidence)) {
+    throw new Error("DeepSeek 教师端回答未满足证据与内容要求");
+  }
+  return { ...output, answer: limitCareerAnswer(output.answer, audience === "curriculum_designer" ? 5200 : 4200) };
 }

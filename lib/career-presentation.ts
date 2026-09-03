@@ -1,4 +1,5 @@
 import type { CareerEvidence } from "@/lib/evidence";
+import type { UserAudience } from "@/types/career";
 
 export interface EvidencePreview {
   sources: string[];
@@ -34,6 +35,20 @@ export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview 
 }
 
 export function buildSuggestedQuestions(evidence: CareerEvidence): string[] {
+  if (evidence.queryPlan?.answerStyle === "curriculum_design") {
+    if (!evidence.curriculum) {
+      return [
+        "请诊断首经贸2025级经济学（实验班）培养方案。",
+        "教师端目前支持哪些学校和年级的培养方案？"
+      ];
+    }
+    const major = String(evidence.curriculum?.major || "本专业");
+    return [
+      `${major}哪些课程可以整合为跨课程实践模块？`,
+      `面向主要匹配职业，${major}最需要补齐哪些技能？`,
+      `${major}应如何把AI协作能力嵌入现有课程？`
+    ];
+  }
   const occupation = evidence.occupations[0]?.name;
   const nextSkill = evidence.nextSkills.find((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01)?.skill;
   const city = evidence.cities[0]?.city;
@@ -56,7 +71,10 @@ export function buildSuggestedQuestions(evidence: CareerEvidence): string[] {
   return Array.from(new Set(questions)).slice(0, 3);
 }
 
-export function formatNoDataCareerAnswer(question: string): string {
+export function formatNoDataCareerAnswer(question: string, audience: UserAudience = "individual"): string {
+  if (audience === "curriculum_designer") {
+    return "要进行培养方案供需诊断，请先提供学校、年级和专业，例如“请诊断首经贸2025级经济学（实验班）培养方案”。系统识别方案后，会对照培养目标、课程能力供给、匹配职业、高频技能、AI影响和未来需求提出修订建议。当前已接入首都经济贸易大学2023—2025级培养方案。";
+  }
   if (/怎样|怎么|如何/.test(question) && /描述|输入/.test(question)) {
     return "你可以按“学校与年级+专业+已经掌握的技能+经验或项目+目标职业或城市”来描述。例如：我是首经贸2024级经济学（实验班）学生，会Python和Stata，做过数据分析项目，想在北京寻找数据分析相关岗位。请区分课程接触过的内容与已经能够独立使用的技能，系统会据此分别识别专业基础和个人增强能力。";
   }
@@ -290,7 +308,55 @@ function formatSkillGrowthFallback(evidence: CareerEvidence): string {
   ].join("\n\n");
 }
 
+function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
+  const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
+  if (!curriculum) return formatNoDataCareerAnswer("", "curriculum_designer");
+  const major = String(curriculum.major || "该专业");
+  const cohort = String(curriculum.cohort || "当前年级");
+  const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((item) => item.trim()).filter(Boolean);
+  const supplied = new Set(evidence.inferredSkills ?? evidence.recognizedSkills);
+  const target = evidence.occupations.slice(0, 2).map((item) => item.name);
+  const targetRows = evidence.targetOccupationSkills ?? [];
+  const targetSkills = Array.from(new Set(targetRows.map((item) => item.skill))).slice(0, 10);
+  const covered = targetSkills.filter((skill) => supplied.has(skill));
+  const gaps = targetSkills.filter((skill) => !supplied.has(skill)).slice(0, 5);
+  const rising = evidence.profiles.filter((profile) => {
+    const forecast = typeof profile.forecast === "object" && profile.forecast ? profile.forecast as Record<string, unknown> : {};
+    return typeof forecast.trend === "string" && /上升|增长/.test(forecast.trend);
+  }).map(profileName).slice(0, 4);
+  const versions = [...(evidence.curriculumVersions ?? [])].sort((left, right) => String(left.cohort || "").localeCompare(String(right.cohort || ""), "zh-CN"));
+  let versionLine = "当前仅检索到一个年级版本，暂不对历年变化作推断。";
+  if (versions.length > 1) {
+    const first = versions[0];
+    const latest = versions[versions.length - 1];
+    const skillNames = (version: Record<string, unknown>) => new Set((Array.isArray(version.skillEvidence) ? version.skillEvidence : []).map((row) => String((row as Record<string, unknown>).canonical_name || "")).filter(Boolean));
+    const firstSkills = skillNames(first);
+    const latestSkills = skillNames(latest);
+    const additions = Array.from(latestSkills).filter((skill) => !firstSkills.has(skill)).slice(0, 5);
+    versionLine = `已对照${versions.map((version) => String(version.cohort || "")).join("、")}级方案。${additions.length ? `相较最早版本，最新版本的代表性能力中新增或更突出${additions.join("、")}；这一变化仍需结合课程学分和教学内容复核。` : "各年级代表性技能供给总体延续，暂未识别出足以支持结构性变化判断的新增能力。"}`;
+  }
+  return [
+    "**诊断结论**",
+    `${cohort}级${major}已形成以${courses.slice(0, 6).join("、") || "专业基础与方法课程"}为代表的课程主线。课程文本可映射出${Array.from(supplied).slice(0, 8).join("、") || "若干专业能力"}等潜在技能供给，但这反映培养覆盖，不等同于学生实际掌握。`,
+    "**岗位需求对应**",
+    target.length ? `当前课程供给较适合对接${target.join("、")}。${targetSkills.length ? `这些方向较常见的技能包括${targetSkills.join("、")}。` : "当前尚未取得职业内部技能排序。"}` : "现有证据尚不足以确定主要对接职业，应先明确专业培养定位后再缩小比较范围。",
+    covered.length ? `其中课程能力映射已覆盖${covered.join("、")}。` : "在当前代表性技能口径下，课程供给与目标职业高频技能尚未形成明确交集。",
+    gaps.length ? `较值得进一步核查的能力缺口是${gaps.join("、")}；“缺口”表示未被培养方案文本稳定识别，并不等于课程实际没有教学。` : "未识别出明确的高频技能缺口，下一步应重点检查教学深度和成果评价。",
+    rising.length ? `${rising.join("、")}在${evidence.forecastYear}年预测中呈上升趋势，可作为课程实践内容调整的市场信号。` : "现有预测证据未形成需要单独强调的上升技能清单。",
+    "**历年方案变化**",
+    versionLine,
+    "**修订建议**",
+    `1. 保留能够支撑学科基础和长期迁移能力的核心理论课程，避免仅依据短期招聘热度删减基础训练。`,
+    `2. ${gaps.length ? `围绕${gaps.slice(0, 3).join("、")}优先核查现有课程覆盖；能由既有课程承接的，采用模块整合和案例更新，而非简单增设课程。` : "将修订重点由增加课程数量转向课程衔接、项目深度和学习成果评价。"}`,
+    `3. 建立跨课程实践项目，让学生完成“专业问题定义—数据或任务处理—结果核验—业务解释”，并将作品质量纳入能力达成评价。`,
+    "4. 将AI工具嵌入资料检索、代码辅助和初步分析，同时强化数据质量判断、方法选择、结果解释、伦理与责任边界。",
+    "**证据边界**",
+    "本诊断使用的招聘样本主要来自上市公司及集团公司，适合提供岗位需求与技能变化信号，但不能单独决定培养方案；最终修订还应结合专业定位、师资条件、课程学分和学生长期发展目标审议。"
+  ].join("\n\n");
+}
+
 export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = ""): string {
+  if (evidence.queryPlan?.answerStyle === "curriculum_design") return formatCurriculumDesignFallback(evidence);
   if (evidence.queryPlan?.answerStyle === "ai_tasks") return formatAiTaskFallback(evidence);
   if (evidence.queryPlan?.answerStyle === "comparison") return formatComparisonFallback(evidence, question);
   if (evidence.queryPlan?.answerStyle === "skill_growth") return formatSkillGrowthFallback(evidence);

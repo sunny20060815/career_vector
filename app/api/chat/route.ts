@@ -59,6 +59,11 @@ function progressCopy(plan: CareerQueryPlan) {
       searching: "正在读取回答当前问题所需的劳动力市场证据...",
       writing: "相关证据已就绪，正在组织针对性说明...",
       fallback: "生成服务较慢，正在依据已检索证据完成说明..."
+    },
+    curriculum_design: {
+      searching: "正在对照培养目标、历年课程供给与真实岗位需求...",
+      writing: "课程与市场证据已对齐，正在形成培养方案诊断与修订建议...",
+      fallback: "生成服务较慢，正在依据培养方案与岗位证据完成诊断..."
     }
   } as const;
   return copy[plan.answerStyle];
@@ -72,6 +77,7 @@ export async function POST(request: Request) {
     return errorResponse("请求格式无效", 400);
   }
   const question = typeof body.question === "string" ? body.question.trim() : "";
+  const audience = body.audience === "curriculum_designer" ? "curriculum_designer" : "individual";
   if (!question || question.length > 1600) return errorResponse("请输入 1 到 1600 个字符的问题", 400);
 
   const stream = new ReadableStream<Uint8Array>({
@@ -104,7 +110,7 @@ export async function POST(request: Request) {
           if (userMessageError) throw new Error("无法保存提问");
 
           const query = mergeCareerQueryContext(await parseCareerQuestionFromCatalog(question), previousQuery);
-          const queryPlan = await planCareerQuestion(question, query);
+          const queryPlan = await planCareerQuestion(question, query, audience);
           const taskProgress = progressCopy(queryPlan);
           emit({ type: "status", payload: { stage: "searching", message: taskProgress.searching } });
           const evidence = await retrieveCareerEvidence(query, queryPlan);
@@ -112,11 +118,15 @@ export async function POST(request: Request) {
           emit({ type: "evidence", payload: { preview } });
 
           const noData = evidence.recognizedSkills.length === 0 && !evidence.targetOccupationSkills?.length;
+          const missingCurriculum = audience === "curriculum_designer" && !evidence.curriculum;
           let answer: string;
           let suggestedQuestions: string[] = [];
           emit({ type: "status", payload: { stage: "writing", message: taskProgress.writing } });
-          try {
-            const generated = await writeCareerAnswer(question, evidence);
+          if (missingCurriculum) {
+            answer = formatNoDataCareerAnswer(question, audience);
+            suggestedQuestions = buildSuggestedQuestions(evidence);
+          } else try {
+            const generated = await writeCareerAnswer(question, evidence, audience);
             answer = generated.answer;
             suggestedQuestions = generated.suggestedQuestions.length ? generated.suggestedQuestions : buildSuggestedQuestions(evidence);
           } catch (error) {
@@ -124,13 +134,13 @@ export async function POST(request: Request) {
               message: error instanceof Error ? error.message : String(error)
             });
             emit({ type: "status", payload: { stage: "fallback", message: taskProgress.fallback } });
-            answer = noData ? formatNoDataCareerAnswer(question) : formatFallbackCareerAnswer(evidence, question);
+            answer = noData ? formatNoDataCareerAnswer(question, audience) : formatFallbackCareerAnswer(evidence, question);
             suggestedQuestions = buildSuggestedQuestions(evidence);
           }
           const { error: assistantMessageError } = await supabase.from("messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", content: answer, structured_query: query, evidence });
           if (assistantMessageError) throw new Error("无法保存回答");
           await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
-          const response: ChatResponse = { conversationId, answer, suggestedQuestions, query, evidence, noData };
+          const response: ChatResponse = { conversationId, answer, suggestedQuestions, query, evidence, noData, audience };
           emit({ type: "complete", payload: response as unknown as Record<string, unknown> });
         } catch (error) {
           const message = error instanceof Error ? error.message : "服务暂时不可用";

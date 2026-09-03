@@ -1,4 +1,4 @@
-import type { ParsedCareerQuery } from "@/types/career";
+import type { ParsedCareerQuery, UserAudience } from "@/types/career";
 
 export const CAREER_EVIDENCE_MODULES = [
   "skill_profiles",
@@ -12,7 +12,7 @@ export const CAREER_EVIDENCE_MODULES = [
 ] as const;
 
 export type CareerEvidenceModule = (typeof CAREER_EVIDENCE_MODULES)[number];
-export type CareerAnswerStyle = "recommendation" | "comparison" | "trend" | "ai_tasks" | "learning_plan" | "skill_growth" | "explanation";
+export type CareerAnswerStyle = "recommendation" | "comparison" | "trend" | "ai_tasks" | "learning_plan" | "skill_growth" | "explanation" | "curriculum_design";
 
 export interface CareerQueryPlan {
   route: "standard" | "adaptive";
@@ -22,8 +22,8 @@ export interface CareerQueryPlan {
 }
 
 const moduleSet = new Set<string>(CAREER_EVIDENCE_MODULES);
-const answerStyles = new Set<CareerAnswerStyle>(["recommendation", "comparison", "trend", "ai_tasks", "learning_plan", "skill_growth", "explanation"]);
-const guardedAnswerStyles = new Set<CareerAnswerStyle>(["comparison", "ai_tasks", "learning_plan", "skill_growth"]);
+const answerStyles = new Set<CareerAnswerStyle>(["recommendation", "comparison", "trend", "ai_tasks", "learning_plan", "skill_growth", "explanation", "curriculum_design"]);
+const guardedAnswerStyles = new Set<CareerAnswerStyle>(["comparison", "ai_tasks", "learning_plan", "skill_growth", "curriculum_design"]);
 
 function uniqueModules(modules: CareerEvidenceModule[]): CareerEvidenceModule[] {
   return Array.from(new Set(modules));
@@ -34,7 +34,15 @@ function isProfileIntroduction(question: string, query: ParsedCareerQuery): bool
     && !/趋势|需求|工资|薪资|前景|城市|哪里|课程|学习|提升|下一步|补什么|AI|人工智能|辅助|替代|影响|冲击|互补|组合|比较|哪个|哪项|适合|岗位|职业|工作|就业|求职|转行|如何|怎么|为什么|多少/.test(question);
 }
 
-export function fallbackCareerPlan(question: string, query: ParsedCareerQuery): CareerQueryPlan {
+export function fallbackCareerPlan(question: string, query: ParsedCareerQuery, audience: UserAudience = "individual"): CareerQueryPlan {
+  if (audience === "curriculum_designer") {
+    return {
+      route: "adaptive",
+      answerStyle: "curriculum_design",
+      modules: uniqueModules(["curriculum", "skill_profiles", "occupations", "ai_impact", "skill_pairs", "occupation_catalog"]),
+      focus: "诊断培养目标和课程技能供给，比较历年方案与真实岗位需求，并提出可执行的培养方案修订建议"
+    };
+  }
   const hasProgram = Boolean(query.programKey);
   const isProfile = isProfileIntroduction(question, query);
   const isLearningPlan = /课程学习|学习建议|学习规划|培养方案.*(?:课程|学习)|课程.*(?:怎么|如何|建议)/.test(question);
@@ -68,8 +76,8 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery): 
   return { route: "adaptive", answerStyle: "trend", modules: uniqueModules(["skill_profiles", "ai_impact"]), focus: "直接回答用户询问的技能市场趋势" };
 }
 
-export function parseCareerQueryPlan(content: string, question: string, query: ParsedCareerQuery): CareerQueryPlan {
-  const fallback = fallbackCareerPlan(question, query);
+export function parseCareerQueryPlan(content: string, question: string, query: ParsedCareerQuery, audience: UserAudience = "individual"): CareerQueryPlan {
+  const fallback = fallbackCareerPlan(question, query, audience);
   const profileIntroduction = isProfileIntroduction(question, query);
   const match = content.match(/\{[\s\S]*\}/);
   if (!match) return fallback;
@@ -81,7 +89,7 @@ export function parseCareerQueryPlan(content: string, question: string, query: P
     const parsedAnswerStyle = typeof parsed.answerStyle === "string" && answerStyles.has(parsed.answerStyle as CareerAnswerStyle)
       ? parsed.answerStyle as CareerAnswerStyle
       : fallback.answerStyle;
-    const guarded = guardedAnswerStyles.has(fallback.answerStyle) || profileIntroduction;
+    const guarded = audience === "curriculum_designer" || guardedAnswerStyles.has(fallback.answerStyle) || profileIntroduction;
     const structured = guarded || query.intent === "career_recommendation" || query.intent === "city_recommendation";
     const answerStyle = guarded ? fallback.answerStyle : parsedAnswerStyle;
     const route = guarded ? fallback.route : parsed.route === "standard" || parsed.route === "adaptive" ? parsed.route : fallback.route;
@@ -118,6 +126,7 @@ export const CAREER_PLANNER_PROMPT = `
 
 route 使用 standard 或 adaptive。结构稳定的职业推荐、城市推荐和课程学习方案可用 standard；比较、下一技能、解释、AI任务影响以及其他个性化问题优先使用 adaptive。
 answerStyle 只能使用 recommendation、comparison、trend、ai_tasks、learning_plan、skill_growth、explanation。
+当使用身份为“培养方案制定者”时，必须选择 curriculum_design，并调用 curriculum、skill_profiles、occupations、ai_impact；根据问题可增加 skill_pairs 和 occupation_catalog。此时回答目标是诊断课程能力供给与岗位需求的对应关系，而不是给学生做个人求职推荐。
 当用户只是陈述学校、年级、专业和自己会的技能，没有明确询问下一技能、比较、趋势或其他单项问题时，应选择 recommendation，并调用 curriculum、skill_profiles、occupations、cities、ai_impact 等模块形成综合规划；不得自行改成 skill_growth。
 只选择回答当前问题真正需要的模块，通常2至5个。输出严格JSON，不要Markdown，不要解释：
 {"route":"adaptive","answerStyle":"comparison","modules":["skill_profiles","skill_pairs"],"focus":"比较两项技能的就业投入优先级"}

@@ -60,4 +60,19 @@ describe("career evidence planning", () => {
       modules: ["skill_profiles", "skill_pairs", "next_skills", "occupations", "cities"]
     });
   });
+
+  it("forces curriculum designers onto the curriculum diagnosis route", () => {
+    const question = "请诊断首经贸2025级经济学（实验班）培养方案";
+    const query = parseCareerQuestionLocally(question, catalog, [{
+      programKey: "cueb-2025-economics-experimental",
+      school: "首都经济贸易大学",
+      cohort: "2025级",
+      major: "经济学（实验班）",
+      aliases: ["经济学实验班"]
+    }]);
+    const plan = parseCareerQueryPlan('{"route":"standard","answerStyle":"recommendation","modules":["occupations"],"focus":"个人求职"}', question, query, "curriculum_designer");
+
+    expect(plan).toMatchObject({ route: "adaptive", answerStyle: "curriculum_design" });
+    expect(plan.modules).toEqual(expect.arrayContaining(["curriculum", "skill_profiles", "occupations", "ai_impact"]));
+  });
 });

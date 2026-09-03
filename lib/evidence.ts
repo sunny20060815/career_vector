@@ -1,7 +1,7 @@
 import { normaliseSkillToken } from "@/lib/query";
 import { parseCareerQuestionLocally, type LocalOccupationCatalogEntry, type LocalProgramCatalogEntry, type LocalSkillCatalogEntry } from "@/lib/local-query";
 import { localAiCooccurrence } from "@/lib/ai-cooccurrence-local";
-import { localOccupationEvidence, localProgramCatalog, localProgramEvidence } from "@/lib/curriculum-local";
+import { localOccupationEvidence, localProgramCatalog, localProgramEvidence, localProgramSeriesEvidence } from "@/lib/curriculum-local";
 import { rankOccupations, selectObservedPairs, type OccupationSkillStat, type PairOccupationStat, type SkillPair } from "@/lib/ranking";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CareerEvidenceModule, CareerQueryPlan } from "@/lib/career-plan";
@@ -74,6 +74,7 @@ export interface CareerEvidence {
   confirmedSkills?: string[];
   inferredSkills?: string[];
   curriculum?: Record<string, unknown> | null;
+  curriculumVersions?: Array<Record<string, unknown>>;
   occupationDetails?: Array<{ subclassCode: string; subclassName: string; occupations: Array<{ name: string; description: string }> }>;
   queryPlan?: CareerQueryPlan;
   queriedModules?: CareerEvidenceModule[];
@@ -208,12 +209,14 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const needsPairs = modules.has("skill_pairs") || modules.has("next_skills");
   const needsCities = modules.has("cities");
   const needsAi = modules.has("ai_impact");
+  const curriculumDesign = queryPlan?.answerStyle === "curriculum_design";
+  const majorSkillLimit = curriculumDesign ? 24 : 12;
   const { data: majorSkillRows, error: majorSkillError } = query.programKey && needsCurriculum
-    ? await admin.from("major_skills").select("canonical_name,skill_type,cluster_name,rank,evidence_summary,mapping_basis").eq("program_key", query.programKey).eq("is_representative", true).order("rank").limit(12)
+    ? await admin.from("major_skills").select("canonical_name,skill_type,cluster_name,rank,evidence_summary,mapping_basis").eq("program_key", query.programKey).eq("is_representative", true).order("rank").limit(majorSkillLimit)
     : { data: [], error: null };
   if (majorSkillError) console.warn("Program skills are unavailable; continuing with confirmed skills", majorSkillError.message);
   let localProgram = { program: null, skills: [] } as ReturnType<typeof localProgramEvidence>;
-  if (query.programKey && needsCurriculum && (majorSkillError || !majorSkillRows?.length)) localProgram = localProgramEvidence(query.programKey);
+  if (query.programKey && needsCurriculum && (majorSkillError || !majorSkillRows?.length)) localProgram = localProgramEvidence(query.programKey, majorSkillLimit);
   const effectiveMajorSkillRows: Row[] = !needsCurriculum
     ? []
     : majorSkillError || !majorSkillRows?.length
@@ -304,7 +307,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
     pairId: text(row, "pair_id"), code: text(row, "occupation_code"), probability: numeric(row, "probability"), concentration: numeric(row, "concentration")
   }));
   const rankedOccupations = rankOccupations(recognizedSkills, occupationStats, pairOccupationStats);
-  if (!targetOccupationSkills.length && needsOccupations && rankedOccupations[0] && queryPlan?.answerStyle === "learning_plan") {
+  if (!targetOccupationSkills.length && needsOccupations && rankedOccupations[0] && (queryPlan?.answerStyle === "learning_plan" || curriculumDesign)) {
     const { data: inferredTargetRows, error: inferredTargetError } = await admin.from("occupation_skill_stats")
       .select(`canonical_name,occupation_name,concentration,forecast_demand_${query.forecastYear}`)
       .eq("occupation_name", rankedOccupations[0].name)
@@ -371,7 +374,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
     ? await admin.from("major_programs").select("program_key,school,cohort,college,major,training_objectives,ability_requirements,core_courses,program_features,degree_summary").eq("program_key", query.programKey).maybeSingle()
     : { data: null, error: null };
   if (programError) console.warn("Program details are unavailable; using bundled curriculum index", programError.message);
-  if (query.programKey && needsCurriculum && (programError || !programRow) && !localProgram.program) localProgram = localProgramEvidence(query.programKey);
+  if (query.programKey && needsCurriculum && (programError || !programRow) && !localProgram.program) localProgram = localProgramEvidence(query.programKey, majorSkillLimit);
   const effectiveProgramRow: Row | null = !needsCurriculum
     ? null
     : programError || !programRow
@@ -396,7 +399,28 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
     probability: nullableNumeric(row, "probability"),
     concentration: nullableNumeric(row, "concentration")
   }));
-  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, pairCities };
+  const curriculumVersions = query.programKey && needsCurriculum
+    ? localProgramSeriesEvidence(query.programKey, majorSkillLimit).map(({ program, skills }) => ({
+        program_key: program.programKey,
+        school: program.school,
+        cohort: program.cohort,
+        college: program.college,
+        major: program.major,
+        training_objectives: program.trainingObjectives,
+        ability_requirements: program.abilityRequirements,
+        core_courses: program.coreCourses,
+        program_features: program.programFeatures,
+        skillEvidence: skills.map((skill) => ({
+          canonical_name: skill.canonicalName,
+          skill_type: skill.skillType,
+          cluster_name: skill.clusterName,
+          rank: skill.rank,
+          evidence_summary: skill.evidenceSummary,
+          mapping_basis: skill.mappingBasis
+        }))
+      }))
+    : [];
+  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, curriculumVersions, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, pairCities };
 }
 
 function rankTargetOccupationSkills(rows: Row[], userSkills: string[], forecastYear: number): TargetOccupationSkill[] {

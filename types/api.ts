@@ -1,10 +1,11 @@
 import type { CareerEvidence } from "@/lib/evidence";
 import type { EvidencePreview } from "@/lib/career-presentation";
-import type { ParsedCareerQuery } from "@/types/career";
+import type { ParsedCareerQuery, UserAudience } from "@/types/career";
 
 export interface ChatRequest {
   question: string;
   conversationId?: string;
+  audience?: UserAudience;
 }
 
 export interface ChatResponse {
@@ -14,6 +15,7 @@ export interface ChatResponse {
   query: ParsedCareerQuery | null;
   evidence: CareerEvidence;
   noData: boolean;
+  audience?: UserAudience;
 }
 
 export interface ChatProgress {

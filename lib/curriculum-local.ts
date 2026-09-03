@@ -111,14 +111,30 @@ export function localProgramCatalog(): LocalProgramCatalogEntry[] {
   }));
 }
 
-export function localProgramEvidence(programKey: string): { program: LocalProgramRecord | null; skills: LocalMajorSkillRecord[] } {
+export function localProgramEvidence(programKey: string, skillLimit = 12): { program: LocalProgramRecord | null; skills: LocalMajorSkillRecord[] } {
   const data = loadLocalCurriculum();
   const program = data.programs.find((row) => row.programKey === programKey) ?? null;
   const skills = data.majorSkills
     .filter((row) => row.programKey === programKey && row.isRepresentative)
     .sort((left, right) => left.rank - right.rank)
-    .slice(0, 12);
+    .slice(0, skillLimit);
   return { program, skills };
+}
+
+export function localProgramSeriesEvidence(programKey: string, skillLimit = 20): Array<{ program: LocalProgramRecord; skills: LocalMajorSkillRecord[] }> {
+  const data = loadLocalCurriculum();
+  const current = data.programs.find((row) => row.programKey === programKey);
+  if (!current) return [];
+  return data.programs
+    .filter((program) => program.school === current.school && program.major === current.major)
+    .sort((left, right) => left.cohort.localeCompare(right.cohort, "zh-CN"))
+    .map((program) => ({
+      program,
+      skills: data.majorSkills
+        .filter((skill) => skill.programKey === program.programKey && skill.isRepresentative)
+        .sort((left, right) => left.rank - right.rank)
+        .slice(0, skillLimit)
+    }));
 }
 
 export function localOccupationEvidence(codes: string[]): LocalOccupationRecord[] {

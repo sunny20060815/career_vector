@@ -4,6 +4,7 @@ import {
   CAREER_ADVISOR_SYSTEM_PROMPT,
   buildCareerAdvisorMessages,
   buildDeepSeekPayload,
+  isAdequateCurriculumDesignerAnswer,
   limitCareerAnswer,
   parseCareerAdvisorOutput
 } from "@/lib/deepseek";
@@ -87,5 +88,19 @@ describe("buildDeepSeekPayload", () => {
     const output = parseCareerAdvisorOutput("\\\\*\\\\*优先建议\\\\*\\\\*\\\\n1\\\\. 学习 SQL");
 
     expect(output.answer).toBe("**优先建议**\n1. 学习 SQL");
+  });
+
+  it("rejects short or incomplete curriculum-designer answers", () => {
+    const evidence = { curriculum: { major: "经济学（实验班）" }, curriculumVersions: [{ cohort: "2023级" }, { cohort: "2025级" }] };
+    const adequate = `${"该培养方案以专业理论和定量课程为基础，并与招聘岗位的技能需求进行对照。".repeat(12)}历年版本变化显示课程能力供给总体延续。建议保留理论基础，强化数据实践，整合课程项目并调整课程衔接。招聘样本主要来自上市公司，不能单独决定培养方案，还需结合学科定位、师资条件和学生长期发展审议。`;
+
+    expect(isAdequateCurriculumDesignerAnswer("建议增加热门课程。", evidence)).toBe(false);
+    expect(isAdequateCurriculumDesignerAnswer(adequate, evidence)).toBe(true);
+  });
+
+  it("labels curriculum evidence as supply signals rather than student mastery", () => {
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("能力供给信号");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不能直接断言课程没有覆盖");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得把工作重新交给教师去招聘网站收集职位");
   });
 });
