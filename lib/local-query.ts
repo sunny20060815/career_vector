@@ -103,7 +103,9 @@ export function parseCareerQuestionLocally(
   const forecastYear = ([2028, 2027, 2026] as const).find((year) => question.includes(String(year))) ?? 2028;
   const experienceMatch = question.match(/(\d+(?:\.\d+)?)\s*年(?:工作)?经验/);
   const education = /博士/.test(question) ? "doctor" : /硕士|研究生/.test(question) ? "master" : /本科/.test(question) ? "bachelor" : /大专/.test(question) ? "associate" : /中专|高中/.test(question) ? "secondary" : null;
-  const cohort = question.match(/20\d{2}(?:级)?/)?.[0].replace("级", "") ?? null;
+  const cohort = question.match(/(20\d{2})\s*(?:级|届)/)?.[1]
+    ?? question.match(/(20\d{2})\s*年(?:入学|招生)/)?.[1]
+    ?? null;
   const candidates = programs.filter((program) => !cohort || program.cohort.startsWith(cohort)).map((program) => ({
     program,
     matchLength: Math.max(0, ...[program.major, ...program.aliases].map((alias) => {

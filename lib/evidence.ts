@@ -190,7 +190,10 @@ export async function parseCareerQuestionFromCatalog(question: string): Promise<
         aliasesByOccupation.set(subclassName, current);
       }
       const occupationCatalog = Array.from(aliasesByOccupation, ([subclassName, occupationAliases]) => ({ subclassName, aliases: Array.from(occupationAliases) }));
-      return { skills: skillCatalog, programs: databasePrograms.length ? databasePrograms : localProgramCatalog(), occupations: occupationCatalog };
+      const mergedPrograms = Array.from(new Map(
+        [...databasePrograms, ...localProgramCatalog()].map((program) => [program.programKey, program])
+      ).values());
+      return { skills: skillCatalog, programs: mergedPrograms, occupations: occupationCatalog };
     })().catch((error: unknown) => {
       catalogPromise = undefined;
       throw error;

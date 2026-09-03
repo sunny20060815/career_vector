@@ -45,6 +45,19 @@ describe("parseCareerQuestionLocally", () => {
     });
   });
 
+  it("does not mistake a forecast year for the program cohort", () => {
+    expect(parseCareerQuestionLocally(
+      "请依据招聘需求和2028年预测，为首经贸2025级经济学（实验班）提出可执行的培养方案修订建议。",
+      catalog,
+      [{ programKey: "cueb-2025-econ-lab", school: "首都经济贸易大学", cohort: "2025级", major: "经济学（实验班）", aliases: ["经济学实验班"] }]
+    )).toMatchObject({
+      forecastYear: 2028,
+      programKey: "cueb-2025-econ-lab",
+      cohort: "2025级",
+      major: "经济学（实验班）"
+    });
+  });
+
   it("inherits skills and curriculum context across follow-up questions", () => {
     const previous = parseCareerQuestionLocally("我是首经贸2024级经济学（实验班）学生，会 Python", catalog, [{ programKey: "cueb-2024-econ-lab", school: "首都经济贸易大学", cohort: "2024级", major: "经济学（实验班）", aliases: ["经济学实验班"] }]);
     const followUp = parseCareerQuestionLocally("培养方案中的哪些课程最有助于进入软件和信息技术服务人员？", catalog);
