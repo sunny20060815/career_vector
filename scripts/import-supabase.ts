@@ -40,7 +40,7 @@ if (!url || !serviceRoleKey) throw new Error("请在 .env.local 中配置 NEXT_P
 const supabase = createClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
 function text(row: SourceRow, key: string): string | null { const value = row[key]?.trim(); return value ? value : null; }
-function number(row: SourceRow, key: string): number | null { const value = Number(row[key]); return Number.isFinite(value) ? value : null; }
+function number(row: SourceRow, key: string): number | null { const raw = row[key]?.trim(); if (!raw) return null; const value = Number(raw); return Number.isFinite(value) ? value : null; }
 function boolean(row: SourceRow, key: string): boolean { return row[key] === "是"; }
 function sourceSkillName(row: SourceRow): string {
   const value = text(row, "标准技能名称") ?? text(row, "canonical_skill");
@@ -106,7 +106,9 @@ async function importRelations(canonicalSkillNameLookup: ReadonlyMap<string, str
   const [pairs, occupations, cities, pairOccupations, pairCities, aiCooccurrence] = await Promise.all([readCsv(FILES.pairs), readCsv(FILES.occupations), readCsv(FILES.cities), readCsv(FILES.pairOccupations), readCsv(FILES.pairCities), readCsv(FILES.aiCooccurrence)]);
   await upsert("skill_pairs", pairs.filter((row) => row["组合层级"] === "标准技能组合" && text(row, "标准技能名称_技能一") && text(row, "标准技能名称_技能二")).map((row) => {
     const [skillA, skillB] = orderSkillPair(resolveCanonicalSkillName(text(row, "标准技能名称_技能一")!, canonicalSkillNameLookup), resolveCanonicalSkillName(text(row, "标准技能名称_技能二")!, canonicalSkillNameLookup));
-    return { id: text(row, "技能组合编号")!, skill_a: skillA, skill_b: skillB, npmi: number(row, "标准化共现强度_NPMI") ?? number(row, "NPMI_2016_2025"), wage_complement_pct: number(row, "工资互补效应_%") ?? number(row, "strict_complement_pct"), wage_complement_p_value: number(row, "互补效应BH调整p值") ?? number(row, "strict_complement_bh_p"), demand_rate_2025: number(row, "2025组合需求率"), demand_rate_2028: number(row, "2028组合需求率预测"), demand_growth_pct: number(row, "2025_2028需求增长_%"), evidence_level: text(row, "互补证据等级") ?? text(row, "证据等级") };
+    const demandRate2025 = number(row, "2025组合需求率");
+    const demandRate2028 = number(row, "2028组合需求率预测") ?? number(row, "组合需求率_2028");
+    return { id: text(row, "技能组合编号")!, skill_a: skillA, skill_b: skillB, npmi: number(row, "标准化共现强度_NPMI") ?? number(row, "NPMI_2016_2025"), wage_complement_pct: number(row, "工资互补效应_%") ?? number(row, "strict_complement_pct") ?? number(row, "工资互补效应_all_%"), wage_complement_p_value: number(row, "互补效应BH调整p值") ?? number(row, "strict_complement_bh_p") ?? number(row, "工资互补BH调整p值_all"), demand_rate_2025: demandRate2025, demand_rate_2028: demandRate2028, demand_growth_pct: number(row, "2025_2028需求增长_%") ?? (demandRate2025 && demandRate2028 !== null ? (demandRate2028 / demandRate2025 - 1) * 100 : null), evidence_level: text(row, "互补证据等级") ?? text(row, "证据等级") };
   }), "id");
   await upsert("occupation_skill_stats", occupations.map((row) => ({ id: text(row, "职业技能关系主键")!, canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), occupation_code: text(row, "职业小类代码")!, occupation_name: text(row, "职业小类名称")!, probability: number(row, "平滑后职业匹配概率") ?? number(row, "掌握技能后进入该职业的概率") ?? 0, concentration: number(row, "职业技能相对集中度") ?? 0, forecast_demand_2026: number(row, "2026年职业内技能需求占比预测"), forecast_demand_2027: number(row, "2027年职业内技能需求占比预测"), forecast_demand_2028: number(row, "2028年职业内技能需求占比预测") })), "id");
   await upsert("city_skill_forecasts", cities.map((row) => ({ id: text(row, "城市技能关系主键")!, canonical_name: resolveCanonicalSkillName(sourceSkillName(row), canonicalSkillNameLookup), city: text(row, "城市")!, forecast_year: number(row, "预测年份")!, demand_ratio: number(row, "城市内技能需求占比预测"), demand_per_10k: number(row, "每万岗位需求数预测"), demand_volume_index: null })), "id");

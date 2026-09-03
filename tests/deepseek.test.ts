@@ -72,6 +72,8 @@ describe("buildDeepSeekPayload", () => {
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("报告式结构");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("只规定本轮必须覆盖的决策内容，不是固定模板");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得为了覆盖上述内容机械使用相同的小标题或句式");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("targetOccupationSkills");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("700-1100 个汉字");
   });
 
   it("separates the visible answer from clickable follow-up questions", () => {

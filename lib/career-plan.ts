@@ -36,7 +36,7 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery): 
   const isComparison = query.intent === "job_comparison" || /对比|比较|相比|哪个|哪项|更值得|还是/.test(question);
   const isSkillGrowth = query.intent === "skill_growth" || /下一步.{0,12}(?:补|学)|补什么技能|提升什么技能|下一项技能/.test(question);
   const isCity = query.intent === "city_recommendation" || /城市|哪里|哪座/.test(question);
-  const isCareer = query.intent === "career_recommendation";
+  const isCareer = query.intent === "career_recommendation" || query.occupationKeywords.length > 0;
 
   if (isLearningPlan) {
     return { route: "standard", answerStyle: "learning_plan", modules: uniqueModules(["curriculum", "skill_profiles", "occupations", "next_skills", "ai_impact"]), focus: "结合培养方案与岗位证据生成学习路径" };

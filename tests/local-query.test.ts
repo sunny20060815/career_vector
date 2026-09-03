@@ -79,4 +79,22 @@ describe("parseCareerQuestionLocally", () => {
       intent: "skill_growth"
     });
   });
+
+  it("recognizes an explicitly named occupation direction", () => {
+    expect(parseCareerQuestionLocally(
+      "我想进入数字技术工程技术人员方向，最常用哪些技能？",
+      catalog,
+      [],
+      [{ subclassName: "数字技术工程技术人员", aliases: ["人工智能工程技术人员"] }]
+    )).toMatchObject({ occupationKeywords: ["数字技术工程技术人员"], intent: "career_recommendation" });
+  });
+
+  it("recognizes a common occupation alias instead of requiring the full catalog name", () => {
+    expect(parseCareerQuestionLocally(
+      "我想做人工智能工程师，这个方向常用哪些技能？",
+      catalog,
+      [],
+      [{ subclassName: "数字技术工程技术人员", aliases: ["人工智能工程师", "大数据工程师"] }]
+    )).toMatchObject({ occupationKeywords: ["数字技术工程技术人员"], intent: "career_recommendation" });
+  });
 });

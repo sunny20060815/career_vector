@@ -111,7 +111,7 @@ export async function POST(request: Request) {
           const preview = buildEvidencePreview(evidence);
           emit({ type: "evidence", payload: { preview } });
 
-          const noData = evidence.recognizedSkills.length === 0;
+          const noData = evidence.recognizedSkills.length === 0 && !evidence.targetOccupationSkills?.length;
           let answer: string;
           let suggestedQuestions: string[] = [];
           emit({ type: "status", payload: { stage: "writing", message: taskProgress.writing } });

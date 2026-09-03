@@ -1,5 +1,5 @@
 import { normaliseSkillToken } from "@/lib/query";
-import { parseCareerQuestionLocally, type LocalProgramCatalogEntry, type LocalSkillCatalogEntry } from "@/lib/local-query";
+import { parseCareerQuestionLocally, type LocalOccupationCatalogEntry, type LocalProgramCatalogEntry, type LocalSkillCatalogEntry } from "@/lib/local-query";
 import { localAiCooccurrence } from "@/lib/ai-cooccurrence-local";
 import { localOccupationEvidence, localProgramCatalog, localProgramEvidence } from "@/lib/curriculum-local";
 import { rankOccupations, selectObservedPairs, type OccupationSkillStat, type PairOccupationStat, type SkillPair } from "@/lib/ranking";
@@ -40,7 +40,15 @@ export interface NextSkillRecommendation {
   citiesAfter?: string[];
 }
 
-let catalogPromise: Promise<{ skills: LocalSkillCatalogEntry[]; programs: LocalProgramCatalogEntry[] }> | undefined;
+export interface TargetOccupationSkill {
+  occupationName: string;
+  skill: string;
+  forecastDemandShare: number | null;
+  concentration: number | null;
+  userHasSkill: boolean;
+}
+
+let catalogPromise: Promise<{ skills: LocalSkillCatalogEntry[]; programs: LocalProgramCatalogEntry[]; occupations: LocalOccupationCatalogEntry[] }> | undefined;
 
 export interface CareerEvidence {
   forecastYear: number;
@@ -61,7 +69,29 @@ export interface CareerEvidence {
   occupationDetails?: Array<{ subclassCode: string; subclassName: string; occupations: Array<{ name: string; description: string }> }>;
   queryPlan?: CareerQueryPlan;
   queriedModules?: CareerEvidenceModule[];
+  targetOccupationSkills?: TargetOccupationSkill[];
 }
+
+const LOCAL_SUPPORTED_PAIRS: Row[] = [{
+  id: "ZH01389",
+  skill_a: "TPM",
+  skill_b: "设备管理",
+  npmi: 0.4265684188432289,
+  wage_complement_pct: 9.06313367029755,
+  wage_complement_p_value: 0.0486674789753573,
+  demand_rate_2025: 0.0008419557719618,
+  demand_rate_2028: 0.0012141814176568,
+  demand_growth_pct: 44.20964355736825,
+  evidence_level: "稳健子技能互补"
+}];
+
+const COMMON_OCCUPATION_ALIASES: Record<string, string[]> = {
+  "数字技术工程技术人员": ["数字技术", "人工智能工程师", "大数据工程师", "云计算工程师", "物联网工程师", "智能制造工程师"],
+  "软件和信息技术服务人员": ["软件开发", "软件测试", "程序员", "数据库运维", "信息技术服务"],
+  "会计专业人员": ["会计", "财务会计"],
+  "统计专业人员": ["统计分析师", "统计师"],
+  "销售人员": ["销售", "销售岗位"]
+};
 
 function text(row: Row, key: string): string {
   return typeof row[key] === "string" ? row[key] : "";
@@ -105,16 +135,18 @@ export async function parseCareerQuestionFromCatalog(question: string): Promise<
   if (!catalogPromise) {
     catalogPromise = (async () => {
       const admin = createAdminClient();
-      const [{ data: skills, error: skillsError }, { data: aliases, error: aliasesError }, { data: programs, error: programsError }] = await Promise.all([
+      const [{ data: skills, error: skillsError }, { data: aliases, error: aliasesError }, { data: programs, error: programsError }, { data: occupations, error: occupationsError }] = await Promise.all([
         admin.from("skills").select("canonical_name"),
         admin.from("skill_aliases").select("canonical_name,alias"),
-        admin.from("major_programs").select("program_key,school,cohort,major,aliases")
+        admin.from("major_programs").select("program_key,school,cohort,major,aliases"),
+        admin.from("occupation_catalog").select("subclass_name,occupation_name").eq("is_displayable", true)
       ]);
       if (skillsError || aliasesError) {
         console.error("Core skill catalog query failed", { skillsError, aliasesError });
         throw new Error("无法加载技能识别词典");
       }
       if (programsError) console.warn("Program catalog is unavailable; using bundled curriculum index", programsError.message);
+      if (occupationsError) console.warn("Occupation catalog is unavailable; explicit occupation matching is disabled", occupationsError.message);
       const aliasesBySkill = new Map<string, string[]>();
       for (const row of (aliases ?? []) as Row[]) {
         const canonicalName = text(row, "canonical_name");
@@ -133,14 +165,29 @@ export async function parseCareerQuestionFromCatalog(question: string): Promise<
         programKey: text(row, "program_key"), school: text(row, "school"), cohort: text(row, "cohort"), major: text(row, "major"),
         aliases: text(row, "aliases").split("|").map((value) => value.trim()).filter(Boolean)
       })).filter((entry) => entry.programKey && entry.major);
-      return { skills: skillCatalog, programs: databasePrograms.length ? databasePrograms : localProgramCatalog() };
+      const aliasesByOccupation = new Map<string, Set<string>>();
+      for (const row of (occupationsError ? [] : occupations ?? []) as Row[]) {
+        const subclassName = text(row, "subclass_name");
+        const occupationName = text(row, "occupation_name");
+        if (!subclassName) continue;
+        const current = aliasesByOccupation.get(subclassName) ?? new Set<string>();
+        if (occupationName) {
+          current.add(occupationName);
+          const shortName = occupationName.replace(/^计算机/, "").replace(/(?:工程技术人员|专业人员|技术人员|管理员|操作员|设计员|服务员|分析师|工程师)$/, "");
+          if (shortName.length >= 4) current.add(shortName);
+        }
+        for (const alias of COMMON_OCCUPATION_ALIASES[subclassName] ?? []) current.add(alias);
+        aliasesByOccupation.set(subclassName, current);
+      }
+      const occupationCatalog = Array.from(aliasesByOccupation, ([subclassName, occupationAliases]) => ({ subclassName, aliases: Array.from(occupationAliases) }));
+      return { skills: skillCatalog, programs: databasePrograms.length ? databasePrograms : localProgramCatalog(), occupations: occupationCatalog };
     })().catch((error: unknown) => {
       catalogPromise = undefined;
       throw error;
     });
   }
   const catalog = await catalogPromise;
-  return parseCareerQuestionLocally(question, catalog.skills, catalog.programs);
+  return parseCareerQuestionLocally(question, catalog.skills, catalog.programs, catalog.occupations);
 }
 
 export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan?: CareerQueryPlan): Promise<CareerEvidence> {
@@ -180,8 +227,17 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const confirmedTokens = (query.confirmedSkills ?? query.skills).map(normaliseSkillToken);
   const confirmedSkills = recognizedSkills.filter((skill) => confirmedTokens.includes(normaliseSkillToken(skill)));
   const unresolvedSkills = query.skills.filter((skill) => !recognizedSkills.some((item) => normaliseSkillToken(item) === normaliseSkillToken(skill)));
+  const { data: targetOccupationRows, error: targetOccupationError } = needsOccupations && query.occupationKeywords.length
+    ? await admin.from("occupation_skill_stats")
+      .select(`canonical_name,occupation_name,concentration,forecast_demand_${query.forecastYear}`)
+      .in("occupation_name", query.occupationKeywords)
+      .order(`forecast_demand_${query.forecastYear}`, { ascending: false })
+      .limit(120)
+    : { data: [], error: null };
+  if (targetOccupationError) console.warn("Target occupation skills are unavailable", targetOccupationError.message);
+  const targetOccupationSkills = rankTargetOccupationSkills((targetOccupationRows ?? []) as Row[], recognizedSkills, query.forecastYear);
   if (!recognizedSkills.length) {
-    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules) };
+    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills };
   }
 
   const profileFields = `canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,forecast_2026,forecast_2027,forecast_2028,fact_summary${needsAi ? ",ai_exposure,ai_group,ai_cooccurrence_npmi,ai_cooccurrence_share" : ""}`;
@@ -195,7 +251,8 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   if (profileError || occupationError || cityError || pairFromSkillAError || pairFromSkillBError) {
     throw new Error("职业证据查询失败");
   }
-  const pairs = Array.from(new Map([...(pairsFromSkillA ?? []), ...(pairsFromSkillB ?? [])].map((row) => [text(row as Row, "id"), row as Row])).values());
+  const localPairs = needsPairs ? LOCAL_SUPPORTED_PAIRS.filter((row) => recognizedSkills.includes(text(row, "skill_a")) || recognizedSkills.includes(text(row, "skill_b"))) : [];
+  const pairs = Array.from(new Map([...(pairsFromSkillA ?? []), ...(pairsFromSkillB ?? []), ...localPairs].map((row) => [text(row as Row, "id"), row as Row])).values());
   const mappedPairs: SkillPair[] = ((pairs ?? []) as Row[]).map((row) => ({ id: text(row, "id"), skillA: text(row, "skill_a"), skillB: text(row, "skill_b") }));
   const nextSkillCandidates = candidateSkillNames(mappedPairs, recognizedSkills);
   const { data: nextSkillProfileRows, error: nextSkillProfileError } = modules.has("next_skills") && nextSkillCandidates.length
@@ -308,7 +365,27 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
     : programRow as Row;
   const cities = rankCities(((cityRows ?? []) as Row[]), recognizedSkills, query.cities);
   const preferenceNotes = buildPreferenceNotes((profiles ?? []) as Row[], query);
-  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules) };
+  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills };
+}
+
+function rankTargetOccupationSkills(rows: Row[], userSkills: string[], forecastYear: number): TargetOccupationSkill[] {
+  const selected = new Set(userSkills);
+  const counts = new Map<string, number>();
+  return rows
+    .sort((left, right) => numeric(right, `forecast_demand_${forecastYear}`) - numeric(left, `forecast_demand_${forecastYear}`))
+    .filter((row) => {
+      const occupation = text(row, "occupation_name");
+      const count = counts.get(occupation) ?? 0;
+      counts.set(occupation, count + 1);
+      return count < 12;
+    })
+    .map((row) => ({
+      occupationName: text(row, "occupation_name"),
+      skill: text(row, "canonical_name"),
+      forecastDemandShare: nullableNumeric(row, `forecast_demand_${forecastYear}`),
+      concentration: nullableNumeric(row, "concentration"),
+      userHasSkill: selected.has(text(row, "canonical_name"))
+    }));
 }
 
 function groupOccupationDetails(rows: Row[]) {

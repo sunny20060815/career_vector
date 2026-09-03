@@ -179,4 +179,22 @@ describe("career presentation", () => {
     expect(answer).toContain("北京、上海、深圳、杭州、广州");
     expect(answer).not.toContain("自行去招聘网站");
   });
+
+  it("lists common skills when the user specifies an occupation direction", () => {
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      recognizedSkills: ["Python"],
+      confirmedSkills: ["Python"],
+      targetOccupationSkills: [
+        { occupationName: "数字技术工程技术人员", skill: "大语言模型", forecastDemandShare: 0.55, concentration: 4, userHasSkill: false },
+        { occupationName: "数字技术工程技术人员", skill: "Python", forecastDemandShare: 0.42, concentration: 3, userHasSkill: true },
+        { occupationName: "数字技术工程技术人员", skill: "PyTorch", forecastDemandShare: 0.38, concentration: 3, userHasSkill: false }
+      ]
+    }, "我想进入数字技术工程技术人员方向，最常用哪些技能？");
+
+    expect(answer).toContain("数字技术工程技术人员的技能画像");
+    expect(answer).toContain("你已经覆盖了其中的Python");
+    expect(answer).toContain("优先补充大语言模型、PyTorch");
+    expect(answer).toContain("不是个人进入该职业的概率");
+  });
 });

@@ -13,6 +13,11 @@ export interface LocalProgramCatalogEntry {
   aliases: readonly string[];
 }
 
+export interface LocalOccupationCatalogEntry {
+  subclassName: string;
+  aliases: readonly string[];
+}
+
 const KNOWN_CITIES = [
   "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "成都", "武汉", "西安", "重庆", "天津",
   "长沙", "郑州", "厦门", "青岛", "宁波", "佛山", "东莞", "合肥", "济南", "大连", "沈阳", "昆明"
@@ -66,7 +71,8 @@ function extractConfirmedSkills(question: string, matched: Array<{ canonicalName
 export function parseCareerQuestionLocally(
   question: string,
   catalog: readonly LocalSkillCatalogEntry[],
-  programs: readonly LocalProgramCatalogEntry[] = []
+  programs: readonly LocalProgramCatalogEntry[] = [],
+  occupations: readonly LocalOccupationCatalogEntry[] = []
 ): ParsedCareerQuery {
   const normalisedQuestion = normalise(question);
   const genericAiImpactQuestion = isGenericAiImpactQuestion(question);
@@ -106,18 +112,26 @@ export function parseCareerQuestionLocally(
     }))
   })).filter((candidate) => candidate.matchLength > 0).sort((left, right) => right.matchLength - left.matchLength || right.program.cohort.localeCompare(left.program.cohort));
   const matchedProgram = candidates[0]?.program ?? null;
+  const hasOccupationContext = /职业|岗位|工作|就业|求职|转行|方向|从事|进入|想做|希望做|准备做/.test(question);
+  const occupationKeywords = Array.from(new Set(occupations
+    .filter((occupation) => [occupation.subclassName, ...(hasOccupationContext ? occupation.aliases : [])].some((name) => {
+      const token = normalise(name);
+      return token.length > 2 && normalisedQuestion.includes(token);
+    }))
+    .sort((left, right) => normalise(right.subclassName).length - normalise(left.subclassName).length)
+    .map((occupation) => occupation.subclassName))).slice(0, 3);
 
   return {
     skills,
     confirmedSkills,
-    occupationKeywords: [],
+    occupationKeywords,
     cities,
     salaryMinYuan: salary,
     salaryMaxYuan: salary,
     experienceYears: experienceMatch ? Number(experienceMatch[1]) : null,
     education,
     forecastYear,
-    intent: extractIntent(question),
+    intent: occupationKeywords.length ? "career_recommendation" : extractIntent(question),
     programKey: matchedProgram?.programKey ?? null,
     school: matchedProgram?.school ?? (/首经贸|首都经济贸易大学/i.test(question) ? "首都经济贸易大学" : null),
     cohort: matchedProgram?.cohort ?? cohort,

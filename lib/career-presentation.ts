@@ -25,7 +25,7 @@ export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview 
   return {
     sources: Array.from(new Set(sources)),
     skills: evidence.recognizedSkills.slice(0, 5),
-    occupations: evidence.occupations.slice(0, 3).map((item) => item.name),
+    occupations: Array.from(new Set([...evidence.occupations.slice(0, 3).map((item) => item.name), ...(evidence.targetOccupationSkills ?? []).map((item) => item.occupationName)])).slice(0, 3),
     cities: evidence.cities.slice(0, 3).map((item) => item.city),
     nextSkills: evidence.nextSkills.slice(0, 3).map((item) => item.skill),
     observedPairCount: evidence.observedPairCount
@@ -266,6 +266,7 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = 
   if (evidence.queryPlan?.answerStyle === "ai_tasks") return formatAiTaskFallback(evidence);
   if (evidence.queryPlan?.answerStyle === "comparison") return formatComparisonFallback(evidence, question);
   if (evidence.queryPlan?.answerStyle === "skill_growth") return formatSkillGrowthFallback(evidence);
+  if (evidence.targetOccupationSkills?.length) return formatTargetOccupationFallback(evidence);
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
   if (curriculum && /课程学习|学习建议|学习规划|课程.*怎么|课程.*如何/.test(question)) return formatCurriculumLearningAnswer(evidence, curriculum);
   const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;
@@ -382,5 +383,20 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = 
     ...reasonLines,
     "**下一步**",
     ...actions.map((action, index) => `${index + 1}. ${action}`)
+  ].join("\n\n");
+}
+
+function formatTargetOccupationFallback(evidence: CareerEvidence): string {
+  const target = evidence.targetOccupationSkills?.[0]?.occupationName ?? "目标职业";
+  const skills = (evidence.targetOccupationSkills ?? []).filter((item) => item.occupationName === target).slice(0, 10);
+  const held = skills.filter((item) => item.userHasSkill).map((item) => item.skill);
+  const missing = skills.filter((item) => !item.userHasSkill);
+  const technical = missing.filter((item) => !/沟通|团队|责任|学习|抗压|协调|表达|英语/.test(item.skill)).slice(0, 4);
+  const priorities = technical.length ? technical : missing.slice(0, 4);
+  return [
+    `**${target}的技能画像**`,
+    `${evidence.forecastYear}年预测中，这一职业方向较常要求的技能包括${skills.map((item) => item.skill).join("、")}。这些占比反映岗位要求中的常用程度，不是个人进入该职业的概率。`,
+    held.length ? `你已经覆盖了其中的${held.join("、")}。` : "目前尚未从你的输入中确认已覆盖上述核心技能。",
+    priorities.length ? `下一步可优先补充${priorities.map((item) => item.skill).join("、")}，并用一个面向${target}的项目同时证明工具应用、结果核验和业务解释能力。` : "现有输入已覆盖主要技能，可进一步用项目或实习证明实际应用深度。"
   ].join("\n\n");
 }
