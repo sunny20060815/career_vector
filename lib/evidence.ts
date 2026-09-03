@@ -75,6 +75,7 @@ export interface CareerEvidence {
   confirmedSkills?: string[];
   inferredSkills?: string[];
   majorDestinations?: MajorDestinationPrior[];
+  majorIdentity?: { inputMajorName: string; standardMajorName: string; standardMajorCode: string } | null;
   curriculum?: Record<string, unknown> | null;
   curriculumVersions?: Array<Record<string, unknown>>;
   occupationDetails?: Array<{ subclassCode: string; subclassName: string; occupations: Array<{ name: string; description: string }> }>;
@@ -216,6 +217,11 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const needsAi = modules.has("ai_impact");
   const curriculumDesign = queryPlan?.answerStyle === "curriculum_design";
   const localMajor = query.programKey ? resolveLocalMajor(query.programKey) : null;
+  const majorIdentity = localMajor ? {
+    inputMajorName: localMajor.inputMajorName,
+    standardMajorName: localMajor.majorName,
+    standardMajorCode: localMajor.majorCode
+  } : null;
   let majorDestinations: MajorDestinationPrior[] = [];
   if (localMajor && modules.has("major_destinations")) {
     const destinationQuery = admin.from("major_destination_priors")
@@ -270,7 +276,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   if (targetOccupationError) console.warn("Target occupation skills are unavailable", targetOccupationError.message);
   let targetOccupationSkills = rankTargetOccupationSkills((targetOccupationRows ?? []) as Row[], recognizedSkills, query.forecastYear);
   if (!recognizedSkills.length && !majorDestinations.length) {
-    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], majorDestinations, curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills };
+    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], majorDestinations, majorIdentity, curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills };
   }
 
   const profileFields = `canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,forecast_2026,forecast_2027,forecast_2028,fact_summary${needsAi ? ",ai_exposure,ai_group,ai_cooccurrence_npmi,ai_cooccurrence_share" : ""}`;
@@ -446,7 +452,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
         }))
       }))
     : [];
-  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, majorDestinations, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, curriculumVersions, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, pairCities };
+  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, majorDestinations, majorIdentity, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, curriculumVersions, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, pairCities };
 }
 
 function rankTargetOccupationSkills(rows: Row[], userSkills: string[], forecastYear: number): TargetOccupationSkill[] {

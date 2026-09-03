@@ -77,6 +77,7 @@ describe("career presentation", () => {
         occupationCode: "2-06-03", occupationName: "会计专业人员", destinationName: "财务分析", destinationShare: 3.7,
         displayRank: 1, directionType: "已毕业人员从业方向", dataScope: "专业", destinationTier: "核心去向", mappingConfidence: "高"
       }],
+      majorIdentity: { inputMajorName: "经济学（实验班）", standardMajorName: "经济学", standardMajorCode: "020101" },
       targetOccupationSkills: [
         { occupationName: "数字技术工程技术人员", skill: "统计分析", forecastDemandShare: 0.3, concentration: 1, userHasSkill: true },
         { occupationName: "数字技术工程技术人员", skill: "Python", forecastDemandShare: 0.2, concentration: 1, userHasSkill: false }
@@ -86,6 +87,7 @@ describe("career presentation", () => {
     expect(answer).toContain("**核心判断**");
     expect(answer).toContain("应继续以专业定位和主要就业去向为培养主轴");
     expect(answer).toContain("财务分析");
+    expect(answer).toContain("国标专业“经济学”（020101）");
     expect(answer).toContain("**历年方案变化**");
     expect(answer).toContain("人工智能技术");
     expect(answer).toContain("**修订建议**");

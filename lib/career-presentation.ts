@@ -335,6 +335,10 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
   if (!curriculum) return formatNoDataCareerAnswer("", "curriculum_designer");
   const major = String(curriculum.major || "该专业");
   const cohort = String(curriculum.cohort || "当前年级");
+  const majorIdentity = evidence.majorIdentity;
+  const standardMajorLine = majorIdentity?.standardMajorCode
+    ? `系统已将“${majorIdentity.inputMajorName}”映射为国标专业“${majorIdentity.standardMajorName}”（${majorIdentity.standardMajorCode}），并据此调用专业就业去向。`
+    : "";
   const courses = curriculumCourseNames(curriculum);
   const theoryCourses = courses.filter((course) => /经济学|财政学|金融学|会计学|管理学|法学|教育学|新闻学|社会学/.test(course) && !/数学|计量|统计|数据|人工智能|机器学习/.test(course)).slice(0, 6);
   const methodCourses = courses.filter((course) => /数学|计量|统计|预测|实验|研究方法/.test(course)).slice(0, 6);
@@ -371,6 +375,7 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
   }
   return [
     "**核心判断**",
+    standardMajorLine,
     `${cohort}${major}应继续以专业定位和主要就业去向为培养主轴，课程供给、招聘技能和${evidence.forecastYear}年预测只用于检验与校准这条主轴。${digitalCourses.length ? `方案已包含${digitalCourses.slice(0, 4).join("、")}，这些工具应用于增强${major.replace(/（.*?）/g, "")}专业工作，不应反过来将人才培养定位导向纯技术职业。` : ""}`,
     destinationNames.length ? `专业就业去向显示，相关方向主要包括${destinationNames.join("、")}。后续的课程与技能调整均应优先回应这些专业路径。` : "当前未取得可用的专业就业去向，以下职业对应仅作为待复核的市场信号。",
     "**课程结构与岗位接口**",

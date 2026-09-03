@@ -81,7 +81,7 @@ export function loadLocalCurriculum(): LocalCurriculumData {
     coreCourses: value(row, "核心课程概括"),
     programFeatures: value(row, "培养特色概括"),
     degreeSummary: value(row, "学制与学位概括")
-  })).filter((row) => row.programKey && row.major);
+  })).filter((row) => row.programKey && row.major.length > 1 && row.major !== "nan");
   const majorSkills = readCsv(MAJOR_SKILLS_FILE).map((row) => ({
     programKey: value(row, "专业主键"),
     canonicalName: value(row, "标准技能名称"),
