@@ -126,4 +126,16 @@ describe("parseCareerQuestionLocally", () => {
       [{ subclassName: "审计专业人员", aliases: [] }]
     )).toMatchObject({ occupationKeywords: ["审计专业人员"], intent: "career_recommendation" });
   });
+
+  it("recalls occupation candidates from a non-standard natural-language target", () => {
+    const query = parseCareerQuestionLocally(
+      "我是首经贸2024级经济统计学学生，想进入AI技术相关职业。",
+      catalog,
+      [],
+      [{ subclassName: "数字技术工程技术人员", aliases: ["人工智能工程技术人员", "大数据工程技术人员"] }]
+    );
+
+    expect(query.occupationKeywords).toEqual([]);
+    expect(query.occupationCandidates?.[0]).toBe("数字技术工程技术人员");
+  });
 });

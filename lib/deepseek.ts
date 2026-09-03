@@ -635,8 +635,13 @@ export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: obj
 export function isAdequateIndividualCareerAnswer(answer: string, evidence: object): boolean {
   const record = evidence as Record<string, unknown>;
   if (!record.curriculum || !Array.isArray(record.majorDestinations) || record.majorDestinations.length === 0) return true;
+  const requestedOccupations = Array.isArray(record.requestedOccupations)
+    ? record.requestedOccupations.filter((item): item is string => typeof item === "string")
+    : [];
   const occupations = Array.isArray(record.occupations) ? record.occupations as Array<Record<string, unknown>> : [];
-  const mentionsEvidenceOccupation = occupations.length === 0 || occupations.slice(0, 3).some((row) => {
+  const mentionsEvidenceOccupation = requestedOccupations.length
+    ? requestedOccupations.some((name) => answer.includes(name))
+    : occupations.length === 0 || occupations.slice(0, 3).some((row) => {
     const name = typeof row.name === "string" ? row.name : "";
     return name && answer.includes(name);
   });

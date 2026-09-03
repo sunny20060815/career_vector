@@ -35,6 +35,41 @@ function normalise(value: string): string {
   return value.normalize("NFKC").trim().toLocaleLowerCase("zh-CN").replace(/[\s_\-—－/\\（）()、，,；;。！？!?]/g, "");
 }
 
+function ngrams(value: string): Set<string> {
+  const normalized = normalise(value);
+  return new Set(Array.from({ length: Math.max(0, normalized.length - 1) }, (_, index) => normalized.slice(index, index + 2)));
+}
+
+function semanticSimilarity(left: string, right: string): number {
+  const a = normalise(left);
+  const b = normalise(right);
+  if (!a || !b) return 0;
+  if (a.includes(b) || b.includes(a)) return Math.min(a.length, b.length) >= 3 ? 1 : 0.5;
+  const leftGrams = ngrams(a);
+  const rightGrams = ngrams(b);
+  const overlap = Array.from(leftGrams).filter((gram) => rightGrams.has(gram)).length;
+  return overlap / Math.max(1, Math.min(leftGrams.size, rightGrams.size));
+}
+
+function extractOccupationTarget(question: string): string | null {
+  const match = question.match(/(?:想|希望|计划|准备|打算|考虑|目标(?:是|为)?|意向(?:是|为)?)(?:进入|从事|转向|转行|应聘|做)?\s*([^，,。！？；;\n]{2,32}?)(?=(?:相关)?(?:职业|岗位|方向|工作)|[，,。！？；;\n]|$)/i);
+  return match?.[1]?.trim() || null;
+}
+
+function rankOccupationCandidates(target: string, skills: string[], occupations: LocalOccupationCatalogEntry[]): string[] {
+  const terms = [target, ...skills].filter(Boolean);
+  return occupations
+    .map((occupation) => ({
+      name: occupation.subclassName,
+      score: Math.max(...terms.flatMap((term) => [occupation.subclassName, ...occupation.aliases].map((label) => semanticSimilarity(term, label))))
+    }))
+    .filter((candidate) => candidate.score >= 0.34)
+    .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name, "zh-CN"))
+    .map((candidate) => candidate.name)
+    .filter((name, index, values) => values.indexOf(name) === index)
+    .slice(0, 12);
+}
+
 function parseMoney(value: string, unit: string | undefined): number {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return 0;
@@ -147,11 +182,14 @@ export function parseCareerQuestionLocally(
     })
     .sort((left, right) => normalise(right.subclassName).length - normalise(left.subclassName).length)
     .map((occupation) => occupation.subclassName))).slice(0, 3);
+  const occupationTarget = occupationKeywords.length ? null : extractOccupationTarget(question);
+  const occupationCandidates = occupationTarget ? rankOccupationCandidates(occupationTarget, skills, occupationPool) : [];
 
   return {
     skills,
     confirmedSkills,
     occupationKeywords,
+    occupationCandidates,
     cities,
     salaryMinYuan: salary,
     salaryMaxYuan: salary,

@@ -109,8 +109,15 @@ export async function POST(request: Request) {
           const { error: userMessageError } = await supabase.from("messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", content: question });
           if (userMessageError) throw new Error("无法保存提问");
 
-          const query = mergeCareerQueryContext(await parseCareerQuestionFromCatalog(question), previousQuery);
+          let query = mergeCareerQueryContext(await parseCareerQuestionFromCatalog(question), previousQuery);
           const queryPlan = await planCareerQuestion(question, query, audience);
+          if (queryPlan.occupationTargets?.length) {
+            query = {
+              ...query,
+              occupationKeywords: Array.from(new Set([...query.occupationKeywords, ...queryPlan.occupationTargets])).slice(0, 3),
+              intent: "career_recommendation"
+            };
+          }
           const taskProgress = progressCopy(queryPlan);
           emit({ type: "status", payload: { stage: "searching", message: taskProgress.searching } });
           const evidence = await retrieveCareerEvidence(query, queryPlan);

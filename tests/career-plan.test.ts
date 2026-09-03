@@ -75,4 +75,20 @@ describe("career evidence planning", () => {
     expect(plan).toMatchObject({ route: "adaptive", answerStyle: "curriculum_design" });
     expect(plan.modules).toEqual(expect.arrayContaining(["curriculum", "skill_profiles", "occupations", "ai_impact"]));
   });
+
+  it("accepts only confident semantic occupation targets from recalled candidates", () => {
+    const question = "我是首经贸2024级经济统计学学生，想进入AI技术相关职业，请给我学习建议。";
+    const query = {
+      ...parseCareerQuestionLocally(question, catalog),
+      occupationCandidates: ["数字技术工程技术人员", "软件和信息技术服务人员"]
+    };
+    const plan = parseCareerQueryPlan(
+      '{"route":"standard","answerStyle":"learning_plan","modules":["occupations","curriculum"],"focus":"AI技术职业学习路径","occupationTargets":["数字技术工程技术人员"],"occupationTargetConfidence":0.94}',
+      question,
+      query
+    );
+
+    expect(plan.occupationTargets).toEqual(["数字技术工程技术人员"]);
+    expect(plan.occupationTargetConfidence).toBe(0.94);
+  });
 });
