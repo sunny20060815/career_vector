@@ -113,6 +113,26 @@ describe("career presentation", () => {
     expect(answer).not.toContain("**它会改变什么**");
   });
 
+  it("keeps professional destination evidence in every curriculum fallback path", () => {
+    const withDestinations: CareerEvidence = {
+      ...evidence,
+      majorDestinations: [{
+        occupationCode: "2-06-03", occupationName: "会计专业人员", destinationName: "财务分析", destinationShare: 3.7,
+        displayRank: 4, directionType: "已毕业人员从业方向", dataScope: "专业类", destinationTier: "核心去向", mappingConfidence: "高"
+      }]
+    };
+    const learning = formatFallbackCareerAnswer(withDestinations, "请给我课程学习建议");
+    const target = formatFallbackCareerAnswer({ ...withDestinations, targetOccupationSkills: [
+      { occupationName: "会计专业人员", skill: "财务分析", forecastDemandShare: 0.2, concentration: 1, userHasSkill: false }
+    ] }, "我想做会计专业人员");
+    const growth = formatFallbackCareerAnswer({
+      ...withDestinations,
+      queryPlan: { route: "adaptive", answerStyle: "skill_growth", modules: ["curriculum", "major_destinations", "next_skills"], focus: "下一技能" }
+    }, "下一步学什么");
+
+    for (const answer of [learning, target, growth]) expect(answer).toContain("毕业去向资料显示");
+  });
+
   it("does not present zero-value pair or next-skill evidence", () => {
     const answer = formatFallbackCareerAnswer({
       ...evidence,
@@ -136,7 +156,7 @@ describe("career presentation", () => {
     expect(answer).toContain("没有足够直接组合证据");
     expect(answer).not.toContain("0.000");
     expect(answer).not.toContain("无效建议");
-    expect(answer).toContain("可进一步向系统指定目标职业或城市");
+    expect(answer).toContain("当前没有足够证据确定唯一的下一技能");
   });
 
   it("builds three evidence-based follow-up questions for fallback responses", () => {

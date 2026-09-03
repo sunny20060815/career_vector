@@ -2,7 +2,8 @@ import { normaliseSkillToken } from "@/lib/query";
 import { parseCareerQuestionLocally, type LocalOccupationCatalogEntry, type LocalProgramCatalogEntry, type LocalSkillCatalogEntry } from "@/lib/local-query";
 import { localAiCooccurrence } from "@/lib/ai-cooccurrence-local";
 import { localOccupationEvidence, localProgramCatalog, localProgramEvidence, localProgramSeriesEvidence } from "@/lib/curriculum-local";
-import { rankOccupations, selectObservedPairs, type OccupationSkillStat, type PairOccupationStat, type SkillPair } from "@/lib/ranking";
+import { localMajorDestinationPriors, resolveLocalMajor } from "@/lib/major-destinations-local";
+import { applyMajorDestinationPriors, rankOccupations, selectObservedPairs, type MajorDestinationPrior, type OccupationSkillStat, type PairOccupationStat, type SkillPair } from "@/lib/ranking";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CareerEvidenceModule, CareerQueryPlan } from "@/lib/career-plan";
 import type { ParsedCareerQuery } from "@/types/career";
@@ -73,6 +74,7 @@ export interface CareerEvidence {
   preferenceNotes: string[];
   confirmedSkills?: string[];
   inferredSkills?: string[];
+  majorDestinations?: MajorDestinationPrior[];
   curriculum?: Record<string, unknown> | null;
   curriculumVersions?: Array<Record<string, unknown>>;
   occupationDetails?: Array<{ subclassCode: string; subclassName: string; occupations: Array<{ name: string; description: string }> }>;
@@ -205,7 +207,7 @@ export async function parseCareerQuestionFromCatalog(question: string): Promise<
 
 export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan?: CareerQueryPlan): Promise<CareerEvidence> {
   const admin = createAdminClient();
-  const modules = new Set<CareerEvidenceModule>(queryPlan?.modules ?? ["skill_profiles", "occupations", "skill_pairs", "next_skills", "cities", "ai_impact", "curriculum", "occupation_catalog"]);
+  const modules = new Set<CareerEvidenceModule>(queryPlan?.modules ?? ["skill_profiles", "occupations", "skill_pairs", "next_skills", "cities", "ai_impact", "curriculum", "major_destinations", "occupation_catalog"]);
   const needsCurriculum = modules.has("curriculum");
   const needsProfiles = modules.has("skill_profiles") || modules.has("ai_impact");
   const needsOccupations = modules.has("occupations") || modules.has("occupation_catalog");
@@ -213,6 +215,21 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const needsCities = modules.has("cities");
   const needsAi = modules.has("ai_impact");
   const curriculumDesign = queryPlan?.answerStyle === "curriculum_design";
+  const localMajor = query.programKey ? resolveLocalMajor(query.programKey) : null;
+  let majorDestinations: MajorDestinationPrior[] = [];
+  if (localMajor && modules.has("major_destinations")) {
+    const destinationQuery = admin.from("major_destination_priors")
+      .select("occupation_code,occupation_name,destination_name,destination_share,display_rank,direction_type,data_scope,destination_tier,mapping_confidence")
+      .eq(localMajor.majorCode ? "major_code" : "major_name", localMajor.majorCode || localMajor.majorName)
+      .eq("is_rankable", true);
+    const { data, error } = await destinationQuery;
+    if (error) console.warn("Major destination priors are unavailable; using bundled index", error.message);
+    majorDestinations = !error && data?.length ? (data as Row[]).map((row) => ({
+      occupationCode: text(row, "occupation_code"), occupationName: text(row, "occupation_name"), destinationName: text(row, "destination_name"),
+      destinationShare: nullableNumeric(row, "destination_share"), displayRank: numeric(row, "display_rank") || 999,
+      directionType: text(row, "direction_type"), dataScope: text(row, "data_scope"), destinationTier: text(row, "destination_tier"), mappingConfidence: text(row, "mapping_confidence")
+    })) : localMajorDestinationPriors(localMajor.majorCode, localMajor.majorName);
+  }
   const majorSkillLimit = curriculumDesign ? 24 : 12;
   const { data: majorSkillRows, error: majorSkillError } = query.programKey && needsCurriculum
     ? await admin.from("major_skills").select("canonical_name,skill_type,cluster_name,rank,evidence_summary,mapping_basis").eq("program_key", query.programKey).eq("is_representative", true).order("rank").limit(majorSkillLimit)
@@ -241,6 +258,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   ].filter(Boolean)));
   const confirmedTokens = (query.confirmedSkills ?? query.skills).map(normaliseSkillToken);
   const confirmedSkills = recognizedSkills.filter((skill) => confirmedTokens.includes(normaliseSkillToken(skill)));
+  const rankingSkills = confirmedSkills.length ? confirmedSkills : query.occupationKeywords.length ? inferredSkills : query.programKey ? [] : recognizedSkills;
   const unresolvedSkills = query.skills.filter((skill) => !recognizedSkills.some((item) => normaliseSkillToken(item) === normaliseSkillToken(skill)));
   const { data: targetOccupationRows, error: targetOccupationError } = needsOccupations && query.occupationKeywords.length
     ? await admin.from("occupation_skill_stats")
@@ -251,8 +269,8 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
     : { data: [], error: null };
   if (targetOccupationError) console.warn("Target occupation skills are unavailable", targetOccupationError.message);
   let targetOccupationSkills = rankTargetOccupationSkills((targetOccupationRows ?? []) as Row[], recognizedSkills, query.forecastYear);
-  if (!recognizedSkills.length) {
-    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills };
+  if (!recognizedSkills.length && !majorDestinations.length) {
+    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], majorDestinations, curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills };
   }
 
   const profileFields = `canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,forecast_2026,forecast_2027,forecast_2028,fact_summary${needsAi ? ",ai_exposure,ai_group,ai_cooccurrence_npmi,ai_cooccurrence_share" : ""}`;
@@ -269,12 +287,12 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const localPairs = needsPairs ? LOCAL_SUPPORTED_PAIRS.filter((row) => recognizedSkills.includes(text(row, "skill_a")) || recognizedSkills.includes(text(row, "skill_b"))) : [];
   const pairs = Array.from(new Map([...(pairsFromSkillA ?? []), ...(pairsFromSkillB ?? []), ...localPairs].map((row) => [text(row as Row, "id"), row as Row])).values());
   const mappedPairs: SkillPair[] = ((pairs ?? []) as Row[]).map((row) => ({ id: text(row, "id"), skillA: text(row, "skill_a"), skillB: text(row, "skill_b") }));
-  const nextSkillCandidates = candidateSkillNames(mappedPairs, recognizedSkills);
+  const nextSkillCandidates = candidateSkillNames(mappedPairs, rankingSkills);
   const { data: nextSkillProfileRows, error: nextSkillProfileError } = modules.has("next_skills") && nextSkillCandidates.length
     ? await admin.from("skills").select(`canonical_name,skill_type,demand_per_10k_2025,salary_median_2025,forecast_${query.forecastYear}`).limit(1000)
     : { data: [], error: null };
   if (nextSkillProfileError) throw new Error("候选技能指标查询失败");
-  const observedPairIds = selectObservedPairs(recognizedSkills, mappedPairs);
+  const observedPairIds = selectObservedPairs(rankingSkills, mappedPairs);
   const observedPairIdSet = new Set(observedPairIds);
   const observedPairs: ObservedSkillPair[] = ((pairs ?? []) as Row[])
     .filter((row) => observedPairIdSet.has(text(row, "id")))
@@ -309,18 +327,19 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const pairOccupationStats: PairOccupationStat[] = ((pairOccupationRows ?? []) as Row[]).map((row) => ({
     pairId: text(row, "pair_id"), code: text(row, "occupation_code"), probability: numeric(row, "probability"), concentration: numeric(row, "concentration")
   }));
-  const rankedOccupations = rankOccupations(recognizedSkills, occupationStats, pairOccupationStats);
-  if (!targetOccupationSkills.length && needsOccupations && rankedOccupations[0] && (queryPlan?.answerStyle === "learning_plan" || curriculumDesign)) {
+  const skillRankedOccupations = rankOccupations(rankingSkills, occupationStats, pairOccupationStats);
+  const rankedOccupations = applyMajorDestinationPriors(skillRankedOccupations, majorDestinations, query.occupationKeywords.length === 0);
+  if (!targetOccupationSkills.length && needsOccupations && rankedOccupations[0] && (modules.has("next_skills") || queryPlan?.answerStyle === "learning_plan" || curriculumDesign)) {
     const { data: inferredTargetRows, error: inferredTargetError } = await admin.from("occupation_skill_stats")
       .select(`canonical_name,occupation_name,concentration,forecast_demand_${query.forecastYear}`)
       .eq("occupation_name", rankedOccupations[0].name)
       .order(`forecast_demand_${query.forecastYear}`, { ascending: false })
       .limit(12);
     if (inferredTargetError) console.warn("Inferred target occupation skills are unavailable", inferredTargetError.message);
-    targetOccupationSkills = rankTargetOccupationSkills((inferredTargetRows ?? []) as Row[], recognizedSkills, query.forecastYear);
+    targetOccupationSkills = rankTargetOccupationSkills((inferredTargetRows ?? []) as Row[], confirmedSkills, query.forecastYear);
   }
   const rankedNextSkills = modules.has("next_skills")
-    ? recommendNextSkills(mappedPairs, recognizedSkills, (pairs ?? []) as Row[], (nextSkillProfileRows ?? []) as Row[], query.forecastYear)
+    ? recommendNextSkills(mappedPairs, rankingSkills, (pairs ?? []) as Row[], (nextSkillProfileRows ?? []) as Row[], query.forecastYear, new Set(targetOccupationSkills.map((item) => item.skill)))
     : [];
   const rankedNextSkillNames = rankedNextSkills.map((item) => item.skill);
   const [{ data: nextSkillOccupationRows, error: nextSkillOccupationError }, { data: nextSkillCityRows, error: nextSkillCityError }] = await Promise.all([
@@ -338,8 +357,8 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   }));
   const nextSkills: NextSkillRecommendation[] = rankedNextSkills.map((item) => ({
     ...item,
-    occupationsAfter: rankOccupations([...recognizedSkills, item.skill], [...occupationStats, ...nextOccupationStats.filter((row) => row.skill === item.skill)], []).slice(0, 3).map((row) => row.name),
-    citiesAfter: rankCities([...((cityRows ?? []) as Row[]), ...((nextSkillCityRows ?? []) as Row[]).filter((row) => text(row, "canonical_name") === item.skill)], [...recognizedSkills, item.skill], query.cities).map((row) => row.city)
+    occupationsAfter: applyMajorDestinationPriors(rankOccupations([...rankingSkills, item.skill], [...occupationStats, ...nextOccupationStats.filter((row) => row.skill === item.skill)], []), majorDestinations, query.occupationKeywords.length === 0).slice(0, 3).map((row) => row.name),
+    citiesAfter: rankCities([...((cityRows ?? []) as Row[]), ...((nextSkillCityRows ?? []) as Row[]).filter((row) => text(row, "canonical_name") === item.skill)], [...rankingSkills, item.skill], query.cities).map((row) => row.city)
   }));
   const [{ data: aiExposureRows, error: aiExposureError }, { data: aiCooccurrenceRows, error: aiCooccurrenceError }] = await Promise.all([
     needsAi ? admin.from("skill_ai_exposure").select("canonical_name,ai_group,demand_share_2025,demand_share_2028").in("canonical_name", recognizedSkills) : Promise.resolve({ data: [], error: null }),
@@ -387,6 +406,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
         cohort: localProgram.program.cohort,
         college: localProgram.program.college,
         major: localProgram.program.major,
+        major_code: localProgram.program.majorCode,
         training_objectives: localProgram.program.trainingObjectives,
         ability_requirements: localProgram.program.abilityRequirements,
         core_courses: localProgram.program.coreCourses,
@@ -394,7 +414,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
         degree_summary: localProgram.program.degreeSummary
       } : null
     : programRow as Row;
-  const cities = rankCities(((cityRows ?? []) as Row[]), recognizedSkills, query.cities);
+  const cities = rankCities(((cityRows ?? []) as Row[]), rankingSkills.length ? rankingSkills : recognizedSkills, query.cities);
   const preferenceNotes = buildPreferenceNotes((profiles ?? []) as Row[], query);
   const pairCities: PairCityEvidence[] = ((pairCityRows ?? []) as Row[]).map((row) => ({
     pairId: text(row, "pair_id"),
@@ -423,7 +443,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
         }))
       }))
     : [];
-  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, curriculumVersions, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, pairCities };
+  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, majorDestinations, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, curriculumVersions, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, pairCities };
 }
 
 function rankTargetOccupationSkills(rows: Row[], userSkills: string[], forecastYear: number): TargetOccupationSkill[] {
@@ -487,7 +507,7 @@ function candidateSkillNames(pairs: SkillPair[], skills: string[]): string[] {
     .map((pair) => selected.has(pair.skillA) ? pair.skillB : pair.skillA)));
 }
 
-function recommendNextSkills(pairs: SkillPair[], skills: string[], pairRows: Row[], profileRows: Row[], forecastYear: number): Omit<NextSkillRecommendation, "occupationsAfter" | "citiesAfter">[] {
+function recommendNextSkills(pairs: SkillPair[], skills: string[], pairRows: Row[], profileRows: Row[], forecastYear: number, targetSkills = new Set<string>()): Omit<NextSkillRecommendation, "occupationsAfter" | "citiesAfter">[] {
   const byId = new Map(pairRows.map((row) => [text(row, "id"), row]));
   const profiles = new Map(profileRows.map((row) => [text(row, "canonical_name"), row]));
   const selected = new Set(skills);
@@ -526,6 +546,7 @@ function recommendNextSkills(pairs: SkillPair[], skills: string[], pairRows: Row
     };
   });
   return candidates
+    .filter((item) => targetSkills.size === 0 || targetSkills.has(item.skill))
     .sort((left, right) => right.score - left.score)
     .filter((value, index, all) => all.findIndex((item) => item.skill === value.skill) === index)
     .slice(0, 5)

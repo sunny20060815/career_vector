@@ -8,6 +8,7 @@ export const CAREER_EVIDENCE_MODULES = [
   "cities",
   "ai_impact",
   "curriculum",
+  "major_destinations",
   "occupation_catalog"
 ] as const;
 
@@ -39,7 +40,7 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery, a
     return {
       route: "adaptive",
       answerStyle: "curriculum_design",
-      modules: uniqueModules(["curriculum", "skill_profiles", "occupations", "ai_impact", "skill_pairs", "occupation_catalog"]),
+      modules: uniqueModules(["curriculum", "major_destinations", "skill_profiles", "occupations", "ai_impact", "skill_pairs", "occupation_catalog"]),
       focus: "诊断培养目标和课程技能供给，比较历年方案与真实岗位需求，并提出可执行的培养方案修订建议"
     };
   }
@@ -53,25 +54,25 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery, a
   const isCareer = query.intent === "career_recommendation" || query.occupationKeywords.length > 0;
 
   if (isProfile) {
-    return { route: "standard", answerStyle: "recommendation", modules: uniqueModules(["curriculum", "skill_profiles", "occupations", "next_skills", "cities", "ai_impact", "occupation_catalog"]), focus: "结合培养方案与用户确认技能生成综合职业规划" };
+    return { route: "standard", answerStyle: "recommendation", modules: uniqueModules(["curriculum", "major_destinations", "skill_profiles", "occupations", "next_skills", "cities", "ai_impact", "occupation_catalog"]), focus: "结合培养方案、专业就业去向与用户确认技能生成综合职业规划" };
   }
   if (isLearningPlan) {
-    return { route: "standard", answerStyle: "learning_plan", modules: uniqueModules(["curriculum", "skill_profiles", "occupations", "next_skills", "ai_impact"]), focus: "结合培养方案与岗位证据生成学习路径" };
+    return { route: "standard", answerStyle: "learning_plan", modules: uniqueModules(["curriculum", "major_destinations", "skill_profiles", "occupations", "next_skills", "ai_impact"]), focus: "结合培养方案、专业就业去向与岗位证据生成学习路径" };
   }
   if (isAiTask) {
     return { route: "adaptive", answerStyle: "ai_tasks", modules: uniqueModules(["skill_profiles", "ai_impact", "occupations", "skill_pairs"]), focus: "判断AI更可能改变哪些工作任务以及应强化什么能力" };
   }
   if (isSkillGrowth) {
-    return { route: "adaptive", answerStyle: "skill_growth", modules: uniqueModules(["skill_profiles", "skill_pairs", "next_skills", "occupations", "cities", ...(hasProgram ? ["curriculum" as const] : [])]), focus: "推荐下一项技能并评估其对职业、工资与城市选择的影响" };
+    return { route: "adaptive", answerStyle: "skill_growth", modules: uniqueModules(["skill_profiles", "skill_pairs", "next_skills", "occupations", "cities", ...(hasProgram ? ["curriculum" as const, "major_destinations" as const] : [])]), focus: "推荐下一项技能并评估其对职业、工资与城市选择的影响" };
   }
   if (isComparison) {
-    return { route: "adaptive", answerStyle: "comparison", modules: uniqueModules(["skill_profiles", "skill_pairs", "occupations", ...(hasProgram ? ["curriculum" as const] : [])]), focus: "围绕用户给出的选项作直接比较并给出优先级" };
+    return { route: "adaptive", answerStyle: "comparison", modules: uniqueModules(["skill_profiles", "skill_pairs", "occupations", ...(hasProgram ? ["curriculum" as const, "major_destinations" as const] : [])]), focus: "围绕用户给出的选项作直接比较并给出优先级" };
   }
   if (isCity) {
     return { route: "standard", answerStyle: "recommendation", modules: uniqueModules(["skill_profiles", "occupations", "cities"]), focus: "比较城市机会并解释职业与技能依据" };
   }
   if (isCareer) {
-    return { route: "standard", answerStyle: "recommendation", modules: uniqueModules(["skill_profiles", "occupations", "next_skills", "ai_impact", "occupation_catalog", ...(hasProgram ? ["curriculum" as const] : [])]), focus: "给出职业方向、关键依据和可执行的能力提升建议" };
+    return { route: "standard", answerStyle: "recommendation", modules: uniqueModules(["skill_profiles", "occupations", "next_skills", "ai_impact", "occupation_catalog", ...(hasProgram ? ["curriculum" as const, "major_destinations" as const] : [])]), focus: "给出职业方向、关键依据和可执行的能力提升建议" };
   }
   return { route: "adaptive", answerStyle: "trend", modules: uniqueModules(["skill_profiles", "ai_impact"]), focus: "直接回答用户询问的技能市场趋势" };
 }
@@ -122,6 +123,7 @@ export const CAREER_PLANNER_PROMPT = `
 - cities：城市需求与排序
 - ai_impact：职业AI暴露、AI技能共现及任务调整依据
 - curriculum：学校培养方案、课程和推断能力
+- major_destinations：专业毕业去向、专业对口职业先验及去向占比
 - occupation_catalog：职业小类包含的具体职业
 
 route 使用 standard 或 adaptive。结构稳定的职业推荐、城市推荐和课程学习方案可用 standard；比较、下一技能、解释、AI任务影响以及其他个性化问题优先使用 adaptive。

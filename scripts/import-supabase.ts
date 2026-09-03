@@ -31,7 +31,8 @@ const FILES = {
   aiCooccurrence: "02_关系表/08_AI技能共现关系表.csv",
   programs: "02_关系表/09_专业培养方案主表.csv",
   majorSkills: "02_关系表/10_专业技能关系表.csv",
-  occupationCatalog: "02_关系表/11_职业大典职业明细表.csv"
+  occupationCatalog: "02_关系表/11_职业大典职业明细表.csv",
+  majorDestinations: "02_关系表/13_专业职业先验表.csv"
 } as const;
 loadEnv({ path: path.join(ROOT, ".env.local") });
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -123,8 +124,8 @@ async function importRelations(canonicalSkillNameLookup: ReadonlyMap<string, str
 }
 
 async function importCurriculum(canonicalSkillNameLookup: ReadonlyMap<string, string>) {
-  const [programs, majorSkills, occupationCatalog] = await Promise.all([
-    readCsv(FILES.programs), readCsv(FILES.majorSkills), readCsv(FILES.occupationCatalog)
+  const [programs, majorSkills, occupationCatalog, majorDestinations] = await Promise.all([
+    readCsv(FILES.programs), readCsv(FILES.majorSkills), readCsv(FILES.occupationCatalog), readCsv(FILES.majorDestinations)
   ]);
   await upsert("major_programs", programs.map((row) => ({
     program_key: text(row, "专业主键")!, school: text(row, "学校")!, cohort: text(row, "年级")!, college: text(row, "学院"), major: text(row, "专业")!,
@@ -142,6 +143,14 @@ async function importCurriculum(canonicalSkillNameLookup: ReadonlyMap<string, st
     subclass_code: text(row, "职业小类代码")!, subclass_name: text(row, "职业小类名称")!, major_code: text(row, "职业大类代码"), major_name: text(row, "职业大类名称"),
     middle_code: text(row, "职业中类代码"), middle_name: text(row, "职业中类名称"), is_displayable: boolean(row, "是否可展示"), source: text(row, "数据来源")
   })), "occupation_code");
+  await upsert("major_destination_priors", majorDestinations.map((row, index) => ({
+    id: `${text(row, "专业代码")}-${text(row, "去向类型")}-${text(row, "展示顺序")}-${index}`,
+    major_code: text(row, "专业代码")!, major_name: text(row, "专业名称")!, major_category: text(row, "专业类"), direction_type: text(row, "去向类型")!,
+    data_scope: text(row, "数据口径"), scope_name: text(row, "口径名称"), display_rank: number(row, "展示顺序"), destination_name: text(row, "去向名称")!,
+    destination_share: number(row, "去向占比"), route_type: text(row, "发展路径类型"), destination_tier: text(row, "专业去向层级"),
+    occupation_code: text(row, "职业小类代码"), occupation_name: text(row, "职业小类名称"), mapping_confidence: text(row, "映射置信度"),
+    is_rankable: boolean(row, "是否用于职业排序"), source_url: text(row, "来源页面"), collected_at: text(row, "采集日期")
+  })), "id");
 }
 
 async function importSupplemental(canonicalSkillNameLookup: ReadonlyMap<string, string>) {

@@ -13,6 +13,7 @@ export interface LocalProgramRecord {
   cohort: string;
   college: string;
   major: string;
+  majorCode: string;
   aliases: string;
   trainingObjectives: string;
   abilityRequirements: string;
@@ -73,6 +74,7 @@ export function loadLocalCurriculum(): LocalCurriculumData {
     cohort: value(row, "年级"),
     college: value(row, "学院"),
     major: value(row, "专业"),
+    majorCode: value(row, "专业代码"),
     aliases: value(row, "专业别名"),
     trainingObjectives: value(row, "培养目标概括"),
     abilityRequirements: value(row, "主要能力要求概括"),

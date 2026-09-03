@@ -27,9 +27,9 @@ describe("career evidence planning", () => {
     expect(plan).toMatchObject({
       route: "standard",
       answerStyle: "recommendation",
-      focus: "结合培养方案与用户确认技能生成综合职业规划"
+      focus: "结合培养方案、专业就业去向与用户确认技能生成综合职业规划"
     });
-    expect(plan.modules).toEqual(expect.arrayContaining(["curriculum", "skill_profiles", "occupations", "cities", "ai_impact"]));
+    expect(plan.modules).toEqual(expect.arrayContaining(["curriculum", "major_destinations", "skill_profiles", "occupations", "cities", "ai_impact"]));
   });
 
   it("uses the adaptive AI task route and only requests relevant modules", () => {

@@ -58,6 +58,7 @@ queryPlan.answerStyle 只规定本轮必须覆盖的决策内容，不是固定�
 
 当“使用身份”为培养方案制定者时，你是高校培养方案决策支持顾问，不是学生求职顾问。必须：
 - 先概括当前方案的培养定位、课程主线和可能形成的能力供给；
+- 使用 majorDestinations 识别本专业及所属专业类的主要就业去向，使课程修订围绕专业人才培养定位展开，而不是被个别通用工具技能带偏；
 - 将课程供给与匹配职业的常用技能、需求趋势及AI影响相对照，指出覆盖优势、能力缺口和结构性重复；
 - curriculumVersions 存在时比较不同年级方案，只陈述证据中能够确认的新增、延续或弱化内容；
 - 建议必须落到“保留、强化、整合、增设实践环节或调整课程衔接”中的具体动作，并说明依据；
@@ -74,6 +75,8 @@ queryPlan.answerStyle 只规定本轮必须覆盖的决策内容，不是固定�
 - 内容应完整但避免报告式堆砌，通常控制在900—1500个汉字；标题可以随问题调整，不能为了通过要求而机械复制固定模板。
 
 如果用户只是输入“学校、年级、专业 + 我会的技能”，而没有明确提出下一技能或互补问题，应将其视为一次综合职业画像：结合培养方案概括专业训练基础，区分用户确认技能与课程推断能力，给出匹配职业、市场前景、AI影响、城市方向和后续行动。不得擅自把问题缩减成“推荐下一项技能”，也不得仅凭培养方案推断出的 Excel、Office 等通用技能主导职业建议。
+
+只要检索证据同时存在 curriculum 和 majorDestinations，回答必须明确说明专业或所属专业类的主要就业去向如何影响职业判断。不得跳过就业去向，只依据技能表重新做一遍职业排序。
 
 不得为了覆盖上述内容机械使用相同的小标题或句式；用户没有询问、且不会改变决策的维度可以简写。
 
@@ -158,6 +161,15 @@ queryPlan.answerStyle 只规定本轮必须覆盖的决策内容，不是固定�
 - 专业已经给用户提供了哪些基础；
 - 哪些方向与专业训练衔接更自然；
 - 用户还需要自己验证和补齐哪些能力。
+
+majorDestinations 是基于阳光高考公开的已毕业人员和专业预期去向，并映射到职业小类形成的专业就业先验。它与培养方案能力供给、用户确认技能承担不同作用：
+- 先用专业就业先验确定与专业衔接自然的职业候选范围；
+- 再用用户确认技能判断其在这些方向中的个人优势和细分路径；
+- 最后用招聘需求、工资、城市和AI证据评价市场前景。
+
+专业就业先验不是个人就业概率。dataScope 为“专业类”时，只能表述为该专业所属专业类的共同去向信号；destinationShare 是来源页面展示的去向占比，不能外推为当前用户进入该职业的概率。预期去向只能作为专业定位参考，证据强度低于已毕业人员从业方向。
+
+除非用户明确提出转行、目标职业或跨专业探索，不得因为 Python、人工智能、Excel 等工具技能把职业建议直接改写为纯信息技术方向。应优先解释这些技能如何增强本专业工作，例如用于专业分析、研究、预测、运营或决策。明确提出跨专业目标时，可以评估该方向，但必须同时说明与原专业路径相比需要补齐的核心能力。
 
 当检索证据中存在 curriculum 时，普通职业咨询必须用一段精炼文字说明：
 - 课程体系主要由哪些训练模块构成，例如专业理论、统计计量、编程工具或实践课程；
@@ -606,9 +618,26 @@ export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: obj
     /保留|强化|整合|增设|衔接|实践|修订/,
     /边界|样本|学科定位|师资|长期发展|不能单独|不等于/
   ];
+  const hasDestinations = Array.isArray(record.majorDestinations) && record.majorDestinations.length > 0;
   return answer.trim().length >= 500
     && required.every((pattern) => pattern.test(answer))
+    && (!hasDestinations || /毕业去向|就业去向|专业去向|从业方向/.test(answer))
     && (versions.length < 2 || /历年|版本|变化|20(?:23|24|25)级/.test(answer));
+}
+
+export function isAdequateIndividualCareerAnswer(answer: string, evidence: object): boolean {
+  const record = evidence as Record<string, unknown>;
+  if (!record.curriculum || !Array.isArray(record.majorDestinations) || record.majorDestinations.length === 0) return true;
+  const occupations = Array.isArray(record.occupations) ? record.occupations as Array<Record<string, unknown>> : [];
+  const mentionsEvidenceOccupation = occupations.length === 0 || occupations.slice(0, 3).some((row) => {
+    const name = typeof row.name === "string" ? row.name : "";
+    return name && answer.includes(name);
+  });
+  return answer.trim().length >= 300
+    && /培养方案|课程|校内学习/.test(answer)
+    && /毕业去向|就业去向|专业去向|从业方向/.test(answer)
+    && /不等于|不能视为|需要.{0,12}(?:验证|转化|证明)|转化为.{0,12}(?:能力|成果)/.test(answer)
+    && mentionsEvidenceOccupation;
 }
 
 export async function planCareerQuestion(question: string, query: ParsedCareerQuery, audience: UserAudience = "individual"): Promise<CareerQueryPlan> {
@@ -629,6 +658,9 @@ export async function writeCareerAnswer(question: string, evidence: object, audi
   const output = parseCareerAdvisorOutput(content);
   if (audience === "curriculum_designer" && !isAdequateCurriculumDesignerAnswer(output.answer, evidence)) {
     throw new Error("DeepSeek 教师端回答未满足证据与内容要求");
+  }
+  if (audience === "individual" && !isAdequateIndividualCareerAnswer(output.answer, evidence)) {
+    throw new Error("DeepSeek 回答未正确结合培养方案与专业就业去向");
   }
   return { ...output, answer: limitCareerAnswer(output.answer, audience === "curriculum_designer" ? 5200 : 4200) };
 }

@@ -117,7 +117,7 @@ export async function POST(request: Request) {
           const preview = buildEvidencePreview(evidence);
           emit({ type: "evidence", payload: { preview } });
 
-          const noData = evidence.recognizedSkills.length === 0 && !evidence.targetOccupationSkills?.length;
+          const noData = evidence.recognizedSkills.length === 0 && !evidence.targetOccupationSkills?.length && !evidence.majorDestinations?.length;
           const missingCurriculum = audience === "curriculum_designer" && !evidence.curriculum;
           let answer: string;
           let suggestedQuestions: string[] = [];

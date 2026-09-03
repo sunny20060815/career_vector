@@ -20,6 +20,7 @@ export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview 
   if (evidence.observedPairs.length && selected.has("occupations")) sources.push("pair_occupation_stats");
   if (evidence.pairCities?.length) sources.push("pair_city_stats");
   if (evidence.curriculum) sources.push("major_programs", "major_skills");
+  if (evidence.majorDestinations?.length) sources.push("major_destination_priors");
   if (evidence.occupationDetails?.length) sources.push("occupation_catalog");
   if (evidence.aiExposureDetails.length) sources.push("skill_ai_exposure");
   if (evidence.aiCooccurrenceSource === "supabase") sources.push("ai_skill_cooccurrence");
@@ -113,6 +114,16 @@ function curriculumSentence(curriculum: Record<string, unknown>, inferredSkills:
   return `培养方案以${modules || "专业课程与实践训练"}为主要基础，校内学习可能为${trainedAbilities}提供训练；这些课程覆盖仍需通过项目或实习转化为可验证能力。`;
 }
 
+function majorDestinationSentence(evidence: CareerEvidence): string {
+  const rows = evidence.majorDestinations ?? [];
+  if (!rows.length) return "";
+  const names = Array.from(new Set(rows.filter((row) => row.destinationTier !== "通用去向").map((row) => row.destinationName))).slice(0, 5);
+  const classLevel = rows.some((row) => row.dataScope !== "专业");
+  return names.length
+    ? `毕业去向资料显示，该专业${classLevel ? "或所属专业类" : ""}较常见的方向包括${names.join("、")}；本次职业排序先以这些专业相关方向为边界，再用个人确认技能区分具体路径。`
+    : "本次职业排序已使用专业就业去向作为先验约束，避免通用或工具技能脱离专业背景主导推荐。";
+}
+
 function profileSentence(profile: Record<string, unknown>, forecastYear: number): string {
   const forecast = typeof profile.forecast === "object" && profile.forecast !== null
     ? profile.forecast as Record<string, unknown>
@@ -189,13 +200,14 @@ function formatComparisonFallback(evidence: CareerEvidence, question: string): s
   return [
     "**比较结果**",
     `如果以就业市场中的直接岗位信号为标准，我会优先投入${leadingName}。${limitedComparison}`,
+    evidence.curriculum ? majorDestinationSentence(evidence) : "",
     "**数据依据**",
     ...profiles.slice(0, 2).map((profile) => `- ${profileSentence(profile, evidence.forecastYear)}`),
     "**怎么组合投入**",
     unsupported.length
       ? `${unsupported[0]}可以作为专业分析或方法基础，${leadingName}则更适合转化为招聘中可识别、可展示的工具能力。实际学习中不必二选一，但求职作品应优先让${leadingName}形成可验证成果。`
       : `先围绕需求信号更强的${leadingName}形成一个完整项目，再把另一项技能用于增强问题定义、分析方法或应用场景。`
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function isMeaningfulPair(pair: CareerEvidence["observedPairs"][number]): boolean {
@@ -238,6 +250,7 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
   return [
     "**课程学习建议**",
     `建议围绕${occupation}建立“专业理论—定量工具—岗位应用”的学习主线。培养方案提供的是能力基础，真正影响求职的是能否把课程方法转化为目标职业可识别的项目成果。`,
+    majorDestinationSentence(evidence),
     "**目标职业需要什么**",
     occupationSkills.length
       ? `${evidence.forecastYear}年预测中，该方向较常出现的专业技能包括${shareText}${commonSkills.length ? `，同时也重视${commonSkills.map((item) => item.skill).join("、")}等通用能力` : ""}。括号内为技能在该职业岗位中的预测需求占比，不是个人求职成功率。`
@@ -252,7 +265,7 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
       : nextSkill ? `${nextSkill}与现有能力存在直接共现证据，可作为优先验证的补充技能。` : "现有证据不足以确定唯一的下一技能，应先把已有课程能力转化为可验证成果。",
     "**AI辅助方式**",
     `可以使用AI辅助资料梳理、代码解释、调试和初步结果检查；问题设定、数据质量判断、方法选择、结果解释与最终责任仍应由你完成。作品集中应明确展示AI做了什么、你如何核验，以及错误输出是怎样被发现和修正的。`
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function formatSkillGrowthFallback(evidence: CareerEvidence): string {
@@ -262,9 +275,10 @@ function formatSkillGrowthFallback(evidence: CareerEvidence): string {
     return [
       "**结论**",
       "现有关系数据尚不足以可靠地指定唯一下一技能，因此不应为了给出答案而随意推荐。",
+      evidence.curriculum ? majorDestinationSentence(evidence) : "",
       "**当前可确定的方向**",
       `你现有的${confirmedSkills.join("和") || "技能"}更适合先围绕${evidence.occupations.slice(0, 2).map((item) => item.name).join("、") || "目标职业"}形成可验证项目；系统会在获得有效候选技能证据后再比较其职业、工资和城市影响。`
-    ].join("\n\n");
+    ].filter(Boolean).join("\n\n");
   }
 
   const alternatives = evidence.nextSkills.slice(1, 3).map((item) => item.skill);
@@ -295,6 +309,7 @@ function formatSkillGrowthFallback(evidence: CareerEvidence): string {
     .map((item) => item.city);
   return [
     observedPair ? "**现有组合判断**" : "**优先建议**",
+    evidence.curriculum ? majorDestinationSentence(evidence) : "",
     observedPair ? `${pairSentence(observedPair)}${pairDemand ? `${pairDemand}。` : ""}` : "",
     observedPair && pairCities.length ? `该组合历史岗位覆盖靠前的城市为${pairCities.join("、")}；这是组合岗位的空间分布依据，不等同于未来增长排名。` : "",
     "**下一技能建议**",
@@ -305,7 +320,7 @@ function formatSkillGrowthFallback(evidence: CareerEvidence): string {
     `- **城市：** ${cityText}`,
     "**怎么补才有用**",
     `用${confirmedSkills.slice(0, 2).join("、") || "现有技能"}与${candidate.skill}完成一个完整项目，至少呈现数据或任务处理、方法选择、结果验证和业务解释四个环节，使新增技能成为可核验的求职证据。`
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
@@ -316,6 +331,9 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
   const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((item) => item.trim()).filter(Boolean);
   const supplied = new Set(evidence.inferredSkills ?? evidence.recognizedSkills);
   const target = evidence.occupations.slice(0, 2).map((item) => item.name);
+  const destinationNames = Array.from(new Set((evidence.majorDestinations ?? [])
+    .filter((item) => item.destinationTier !== "通用去向")
+    .map((item) => item.destinationName))).slice(0, 6);
   const targetRows = evidence.targetOccupationSkills ?? [];
   const targetSkills = Array.from(new Set(targetRows.map((item) => item.skill))).slice(0, 10);
   const covered = targetSkills.filter((skill) => supplied.has(skill));
@@ -338,6 +356,7 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
   return [
     "**诊断结论**",
     `${cohort}级${major}已形成以${courses.slice(0, 6).join("、") || "专业基础与方法课程"}为代表的课程主线。课程文本可映射出${Array.from(supplied).slice(0, 8).join("、") || "若干专业能力"}等潜在技能供给，但这反映培养覆盖，不等同于学生实际掌握。`,
+    destinationNames.length ? `专业就业去向资料显示，相关毕业或从业方向包括${destinationNames.join("、")}。课程调整应优先服务这些专业主路径，再评估数字工具对专业工作的增强作用。` : "当前未取得可用的专业就业去向资料，职业对应仅作为待复核的招聘市场信号。",
     "**岗位需求对应**",
     target.length ? `当前课程供给较适合对接${target.join("、")}。${targetSkills.length ? `这些方向较常见的技能包括${targetSkills.join("、")}。` : "当前尚未取得职业内部技能排序。"}` : "现有证据尚不足以确定主要对接职业，应先明确专业培养定位后再缩小比较范围。",
     covered.length ? `其中课程能力映射已覆盖${covered.join("、")}。` : "在当前代表性技能口径下，课程供给与目标职业高频技能尚未形成明确交集。",
@@ -352,7 +371,7 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
     "4. 将AI工具嵌入资料检索、代码辅助和初步分析，同时强化数据质量判断、方法选择、结果解释、伦理与责任边界。",
     "**证据边界**",
     "本诊断使用的招聘样本主要来自上市公司及集团公司，适合提供岗位需求与技能变化信号，但不能单独决定培养方案；最终修订还应结合专业定位、师资条件、课程学分和学生长期发展目标审议。"
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = ""): string {
@@ -406,6 +425,8 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = 
   }
   if (curriculum) {
     reasonLines.push(curriculumSentence(curriculum, inferredSkills));
+    const destinationSummary = majorDestinationSentence(evidence);
+    if (destinationSummary) reasonLines.push(destinationSummary);
   }
   for (const occupation of occupations.slice(0, 2)) {
     const matches = occupation.confirmedMatches.length ? occupation.confirmedMatches : occupation.item.matchedSkills.slice(0, 2);
@@ -463,13 +484,19 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = 
     .slice(0, 2);
   const primaryOccupation = occupations[0]?.item.name || "目标岗位";
   const secondaryOccupation = occupations[1]?.item.name;
+  const targetGaps = (evidence.targetOccupationSkills ?? [])
+    .filter((item) => item.occupationName === primaryOccupation && !item.userHasSkill)
+    .filter((item) => !/沟通|团队|责任|学习|抗压|协调|表达/.test(item.skill))
+    .slice(0, 3);
   const actions = [
     `将${primaryOccupation}作为主方向${secondaryOccupation ? `，将${secondaryOccupation}作为备选` : ""}，简历、课程项目和实习经历优先围绕主方向组织。`,
     usefulNextSkills.length
       ? usefulNextSkills.length === 1
         ? `优先验证${usefulNextSkills[0].skill}：它与现有的${usefulNextSkills[0].relatedTo}存在直接共现证据。`
         : `优先验证${usefulNextSkills.map((item) => item.skill).join("或")}：它们分别与现有的${usefulNextSkills.map((item) => item.relatedTo).join("、")}存在直接共现证据。`
-      : "当前没有可靠的下一技能证据，可进一步向系统指定目标职业或城市，再缩小技能缺口范围。",
+      : targetGaps.length
+        ? `围绕${primaryOccupation}，可优先验证${targetGaps.map((item) => item.skill).join("、")}；这些技能在该职业的招聘要求中更常见，应先选择一项与课程项目结合。`
+        : "当前没有足够证据确定唯一的下一技能，可先围绕主方向强化已有专业能力并形成可验证成果。",
     `完成一个面向${primaryOccupation}的课程项目或作品集，明确展示${confirmedSkills.slice(0, 2).join("和") || "核心能力"}的应用过程，以及AI辅助与人工核验各自负责的环节。`
   ];
 
@@ -480,7 +507,7 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = 
     ...reasonLines,
     "**下一步**",
     ...actions.map((action, index) => `${index + 1}. ${action}`)
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function formatTargetOccupationFallback(evidence: CareerEvidence): string {
@@ -492,8 +519,9 @@ function formatTargetOccupationFallback(evidence: CareerEvidence): string {
   const priorities = technical.length ? technical : missing.slice(0, 4);
   return [
     `**${target}的技能画像**`,
+    evidence.curriculum ? majorDestinationSentence(evidence) : "",
     `${evidence.forecastYear}年预测中，这一职业方向较常要求的技能包括${skills.map((item) => item.skill).join("、")}。这些占比反映岗位要求中的常用程度，不是个人进入该职业的概率。`,
     held.length ? `你已经覆盖了其中的${held.join("、")}。` : "目前尚未从你的输入中确认已覆盖上述核心技能。",
     priorities.length ? `下一步可优先补充${priorities.map((item) => item.skill).join("、")}，并用一个面向${target}的项目同时证明工具应用、结果核验和业务解释能力。` : "现有输入已覆盖主要技能，可进一步用项目或实习证明实际应用深度。"
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }

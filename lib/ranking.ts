@@ -26,6 +26,20 @@ export interface RankedOccupation {
   score: number;
   matchedSkills: string[];
   observedPairCount: number;
+  majorPriorScore?: number;
+  majorDestinations?: string[];
+}
+
+export interface MajorDestinationPrior {
+  occupationCode: string;
+  occupationName: string;
+  destinationName: string;
+  destinationShare: number | null;
+  displayRank: number;
+  directionType: string;
+  dataScope: string;
+  destinationTier: string;
+  mappingConfidence: string;
 }
 
 function pairKey(left: string, right: string): string {
@@ -103,6 +117,43 @@ export function rankOccupations(
     })
     .sort((left, right) => right.score - left.score || right.matchedSkills.length - left.matchedSkills.length)
     .slice(0, 10);
+}
+
+export function applyMajorDestinationPriors(
+  skillRanking: readonly RankedOccupation[],
+  priors: readonly MajorDestinationPrior[],
+  useMajorConstraint = true
+): RankedOccupation[] {
+  if (!useMajorConstraint || priors.length === 0) return [...skillRanking];
+  const maximumShare = Math.max(...priors.map((row) => row.destinationShare ?? 0), 0);
+  const grouped = new Map<string, { name: string; score: number; destinations: string[] }>();
+  for (const row of priors) {
+    const typeWeight = row.directionType.includes("已毕业") ? 1 : 0.58;
+    const scopeWeight = row.dataScope === "专业" ? 1 : 0.82;
+    const tierWeight = row.destinationTier === "核心去向" ? 1 : row.destinationTier === "延伸去向" ? 0.62 : 0.18;
+    const confidenceWeight = row.mappingConfidence === "高" ? 1 : 0.72;
+    const shareScore = maximumShare > 0 && row.destinationShare !== null ? row.destinationShare / maximumShare : 0;
+    const rankScore = 1 / Math.sqrt(Math.max(row.displayRank, 1));
+    const score = 100 * typeWeight * scopeWeight * tierWeight * confidenceWeight * (0.65 * shareScore + 0.35 * rankScore);
+    const current = grouped.get(row.occupationCode) ?? { name: row.occupationName, score: 0, destinations: [] };
+    current.score = Math.max(current.score, score);
+    if (!current.destinations.includes(row.destinationName)) current.destinations.push(row.destinationName);
+    grouped.set(row.occupationCode, current);
+  }
+  const skillsByCode = new Map(skillRanking.map((row) => [row.code, row]));
+  return Array.from(grouped, ([code, major]) => {
+    const skill = skillsByCode.get(code);
+    const combined = 0.85 * major.score + 0.15 * (skill?.score ?? 0);
+    return {
+      code,
+      name: major.name,
+      score: Math.round(combined * 10) / 10,
+      matchedSkills: skill?.matchedSkills ?? [],
+      observedPairCount: skill?.observedPairCount ?? 0,
+      majorPriorScore: Math.round(major.score * 10) / 10,
+      majorDestinations: major.destinations.slice(0, 5)
+    };
+  }).sort((left, right) => right.score - left.score).slice(0, 10);
 }
 
 export function pairLookupKey(skillA: string, skillB: string): string {

@@ -168,6 +168,27 @@ create table if not exists public.occupation_catalog (
   source text
 );
 
+create table if not exists public.major_destination_priors (
+  id text primary key,
+  major_code text not null,
+  major_name text not null,
+  major_category text,
+  direction_type text not null,
+  data_scope text,
+  scope_name text,
+  display_rank integer,
+  destination_name text not null,
+  destination_share numeric,
+  route_type text,
+  destination_tier text,
+  occupation_code text,
+  occupation_name text,
+  mapping_confidence text,
+  is_rankable boolean not null default false,
+  source_url text,
+  collected_at date
+);
+
 create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -197,6 +218,8 @@ create index if not exists major_programs_school_cohort_major_idx on public.majo
 create index if not exists major_skills_program_rank_idx on public.major_skills(program_key, rank);
 create index if not exists occupation_catalog_subclass_idx on public.occupation_catalog(subclass_code);
 create index if not exists ai_skill_cooccurrence_npmi_idx on public.ai_skill_cooccurrence(cooccurrence_npmi desc);
+create index if not exists major_destination_priors_code_idx on public.major_destination_priors(major_code, is_rankable);
+create index if not exists major_destination_priors_name_idx on public.major_destination_priors(major_name, is_rankable);
 
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
@@ -214,6 +237,7 @@ alter table public.ai_skill_cooccurrence enable row level security;
 alter table public.major_programs enable row level security;
 alter table public.major_skills enable row level security;
 alter table public.occupation_catalog enable row level security;
+alter table public.major_destination_priors enable row level security;
 
 create policy "users manage own conversations" on public.conversations
   for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);

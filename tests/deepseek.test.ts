@@ -5,6 +5,7 @@ import {
   buildCareerAdvisorMessages,
   buildDeepSeekPayload,
   isAdequateCurriculumDesignerAnswer,
+  isAdequateIndividualCareerAnswer,
   limitCareerAnswer,
   parseCareerAdvisorOutput
 } from "@/lib/deepseek";
@@ -102,5 +103,18 @@ describe("buildDeepSeekPayload", () => {
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("能力供给信号");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不能直接断言课程没有覆盖");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得把工作重新交给教师去招聘网站收集职位");
+  });
+
+  it("rejects program advice that ignores destination evidence or treats courses as mastery", () => {
+    const evidence = {
+      curriculum: { major: "经济学（实验班）" },
+      majorDestinations: [{ destinationName: "财务分析", occupationName: "会计专业人员" }],
+      occupations: [{ name: "会计专业人员" }]
+    };
+    expect(isAdequateIndividualCareerAnswer("你会Python，建议转向数字技术工程技术人员。", evidence)).toBe(false);
+    expect(isAdequateIndividualCareerAnswer(
+      `${"培养方案中的计量和统计课程为经济分析提供基础，但课程覆盖不等于已经掌握。".repeat(8)}专业就业去向显示财务分析较常见，因此可优先考虑会计专业人员，并用Python增强数据处理。`,
+      evidence
+    )).toBe(true);
   });
 });
