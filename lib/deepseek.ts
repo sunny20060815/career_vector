@@ -183,7 +183,7 @@ requestedOccupations 记录用户在问题中明确提出的职业方向。只�
 - 学生通过校内学习可能形成哪些专业基础和分析能力；
 - 这些训练如何与优先职业衔接，还缺少什么可验证的实践能力。
 
-只挑与当前职业决策最相关的 3-6 门课程或课程模块进行归纳，不要大段复述培养目标、完整课程列表或所有推断技能。表述必须使用“课程覆盖”“可能形成”“提供基础”等措辞，不能把培养结果写成用户已经掌握的技能。
+只要用户提到学校、年级或专业且 curriculum 可用，回答必须明确包含“专业课程与能力基础”：从 core_courses 点名 3-6 门真实课程，并结合 inferredSkills 说明校内学习可能训练的 3-5 项能力。只写“统计类课程”“培养方案提供基础”等泛化表述不算完成。不要大段复述培养目标、完整课程列表或所有推断技能。表述必须使用“课程覆盖”“可能形成”“提供基础”等措辞，不能把培养结果写成用户已经掌握的技能。
 
 当用户明确要求“课程学习建议”“学习规划”或询问培养方案中的课程应该怎样学习时，改用学习路径回答，而不是普通职业推荐结构。回答应包括：
 - 先明确目标职业或能力主线；
@@ -618,6 +618,25 @@ export function buildCareerAdvisorMessages(question: string, evidence: object, a
   ];
 }
 
+function mentionsCurriculumDetails(answer: string, record: Record<string, unknown>): boolean {
+  const curriculum = record.curriculum && typeof record.curriculum === "object"
+    ? record.curriculum as Record<string, unknown>
+    : null;
+  if (!curriculum) return true;
+  const rawCourses = String(curriculum.core_courses || "");
+  const quotedCourses = Array.from(rawCourses.matchAll(/《([^》]+)》/g), (match) => match[1].trim());
+  const courses = Array.from(new Set((quotedCourses.length ? quotedCourses : rawCourses.split(/[、，,；;\n]/))
+    .map((item) => item.trim())
+    .filter((item) => item && !/主干学科|核心课程|专业知识图谱/.test(item))));
+  const inferredSkills = Array.isArray(record.inferredSkills)
+    ? record.inferredSkills.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const courseMentions = courses.filter((course) => answer.includes(course)).length;
+  const skillMentions = inferredSkills.filter((skill) => answer.includes(skill)).length;
+  return (courses.length === 0 || courseMentions >= Math.min(2, courses.length))
+    && (inferredSkills.length === 0 || skillMentions >= 1);
+}
+
 export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: object): boolean {
   const record = evidence as Record<string, unknown>;
   const versions = Array.isArray(record.curriculumVersions) ? record.curriculumVersions : [];
@@ -630,13 +649,15 @@ export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: obj
   const hasDestinations = Array.isArray(record.majorDestinations) && record.majorDestinations.length > 0;
   return answer.trim().length >= 500
     && required.every((pattern) => pattern.test(answer))
+    && mentionsCurriculumDetails(answer, record)
     && (!hasDestinations || /毕业去向|就业去向|专业去向|从业方向/.test(answer))
     && (versions.length < 2 || /历年|版本|变化|20(?:23|24|25)级/.test(answer));
 }
 
 export function isAdequateIndividualCareerAnswer(answer: string, evidence: object): boolean {
   const record = evidence as Record<string, unknown>;
-  if (!record.curriculum || !Array.isArray(record.majorDestinations) || record.majorDestinations.length === 0) return true;
+  if (!record.curriculum) return true;
+  const hasDestinations = Array.isArray(record.majorDestinations) && record.majorDestinations.length > 0;
   const requestedOccupations = Array.isArray(record.requestedOccupations)
     ? record.requestedOccupations.filter((item): item is string => typeof item === "string")
     : [];
@@ -652,7 +673,8 @@ export function isAdequateIndividualCareerAnswer(answer: string, evidence: objec
   });
   return answer.trim().length >= 300
     && /培养方案|课程|校内学习/.test(answer)
-    && /毕业去向|就业去向|专业去向|从业方向/.test(answer)
+    && mentionsCurriculumDetails(answer, record)
+    && (!hasDestinations || /毕业去向|就业去向|专业去向|从业方向/.test(answer))
     && /不等于|不能视为|需要.{0,12}(?:验证|转化|证明)|转化为.{0,12}(?:能力|成果)/.test(answer)
     && (!requiresAiExposure || /AI暴露度|人工智能暴露度/.test(answer))
     && (!requiresAiCooccurrence || /与AI技能的共现强度|AI技能共现强度/.test(answer))

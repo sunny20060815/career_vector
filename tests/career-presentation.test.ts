@@ -43,8 +43,8 @@ describe("career presentation", () => {
     expect(answer).toContain("**建议**");
     expect(answer).toContain("优先考虑数字技术工程技术人员");
     expect(answer).toContain("经济学+Python");
-    expect(answer).toContain("专业理论（微观经济学、宏观经济学）");
-    expect(answer).toContain("定量与工具训练（统计学、计量经济学、经济预测）");
+    expect(answer).toContain("核心课程主要包括微观经济学、宏观经济学、统计学、计量经济学、经济预测");
+    expect(answer).toContain("校内学习可能为药学等能力提供基础");
     expect(answer).toContain("与AI技能的共现强度");
     expect(answer).toContain("AI时代下");
     expect(answer).toContain("因果识别");
@@ -114,7 +114,8 @@ describe("career presentation", () => {
     }, question);
 
     expect(answer).toContain("经济学+Stata");
-    expect(answer).toContain("培养方案以");
+    expect(answer).toContain("核心课程主要包括");
+    expect(answer).toContain("不等于你已经掌握");
     expect(answer).toContain("Stata");
     expect(answer).toContain("AI时代下");
     expect(answer).toContain("可优先比较上海");
@@ -184,6 +185,7 @@ describe("career presentation", () => {
   it("creates a curriculum-based learning path when the model is unavailable", () => {
     const answer = formatFallbackCareerAnswer({
       ...evidence,
+      inferredSkills: ["统计分析", "经济预测", "数据分析"],
       targetOccupationSkills: [
         { occupationName: "软件和信息技术服务人员", skill: "沟通能力", forecastDemandShare: 0.527, concentration: 1, userHasSkill: false },
         { occupationName: "软件和信息技术服务人员", skill: "数据库技术", forecastDemandShare: 0.136, concentration: 2, userHasSkill: false },
@@ -195,6 +197,10 @@ describe("career presentation", () => {
 
     expect(answer).toContain("**课程学习建议**");
     expect(answer).toContain("专业理论—定量工具—岗位应用");
+    expect(answer).toContain("**专业课程与能力基础**");
+    expect(answer).toContain("核心课程主要包括微观经济学、宏观经济学、统计学、计量经济学、经济预测");
+    expect(answer).toContain("校内学习可能为统计分析、经济预测、数据分析等能力提供基础");
+    expect(answer).toContain("不等于你已经掌握");
     expect(answer).toContain("**目标职业需要什么**");
     expect(answer).toContain("数据库技术（约13.6%）");
     expect(answer).toContain("Python（约9.8%）");

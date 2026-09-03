@@ -103,22 +103,17 @@ function curriculumCourseNames(curriculum: Record<string, unknown>): string[] {
 }
 
 function curriculumSentence(curriculum: Record<string, unknown>, inferredSkills: string[]): string {
-  const courses = String(curriculum.core_courses || "")
-    .split(/[、，,；;\n]/)
-    .map((course) => course.trim())
-    .filter(Boolean);
+  const courses = curriculumCourseNames(curriculum);
   const quantitative = courses.filter((course) => /统计|计量|数学|预测|数据|编程|模型|算法|机器学习|人工智能/.test(course)).slice(0, 4);
-  const theory = courses.filter((course) => !quantitative.includes(course)).slice(0, 2);
-  const modules = [
-    theory.length ? `专业理论（${theory.join("、")}）` : "",
-    quantitative.length ? `定量与工具训练（${quantitative.join("、")}）` : ""
-  ].filter(Boolean).join("和");
-  const potential = inferredSkills.slice(0, 3).join("、");
-  const major = String(curriculum.major || "");
-  const trainedAbilities = quantitative.length
-    ? /经济|金融|贸易|财政/.test(major) ? "专业问题分析、定量研究和经济预测" : "专业分析、定量研究和工具应用"
-    : potential || "专业分析与问题解决";
-  return `培养方案以${modules || "专业课程与实践训练"}为主要基础，校内学习可能为${trainedAbilities}提供训练；这些课程覆盖仍需通过项目或实习转化为可验证能力。`;
+  const theory = courses.filter((course) => !quantitative.includes(course)).slice(0, 3);
+  const selectedCourses = Array.from(new Set([...theory, ...quantitative])).slice(0, 6);
+  const potentialSkills = Array.from(new Set(inferredSkills)).slice(0, 5);
+  const major = String(curriculum.major || "该专业");
+  const courseText = selectedCourses.length ? `核心课程主要包括${selectedCourses.join("、")}` : "课程体系覆盖专业理论与实践训练";
+  const skillText = potentialSkills.length
+    ? `校内学习可能为${potentialSkills.join("、")}等能力提供基础`
+    : `校内学习可能为${/经济|金融|贸易|财政|统计/.test(major) ? "专业问题分析、定量研究和经济预测" : "专业分析、工具应用和问题解决"}提供基础`;
+  return `${major}${courseText}；${skillText}。这些属于培养方案所反映的潜在能力，不等于你已经掌握，仍需通过课程项目、实习或作品集验证。`;
 }
 
 function majorDestinationSentence(evidence: CareerEvidence): string {
@@ -293,6 +288,8 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
   return [
     "**课程学习建议**",
     `建议围绕${occupation}建立“专业理论—定量工具—岗位应用”的学习主线。培养方案提供的是能力基础，真正影响求职的是能否把课程方法转化为目标职业可识别的项目成果。`,
+    "**专业课程与能力基础**",
+    curriculumSentence(curriculum, evidence.inferredSkills ?? []),
     majorDestinationSentence(evidence),
     "**目标职业需要什么**",
     occupationSkills.length

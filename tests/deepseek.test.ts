@@ -55,6 +55,8 @@ describe("buildDeepSeekPayload", () => {
 
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("AI 技能共现");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("课程体系主要由哪些训练模块构成");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("从 core_courses 点名 3-6 门真实课程");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("结合 inferredSkills 说明校内学习可能训练的 3-5 项能力");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("基础理论—定量或工具训练—综合应用");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得虚构第几学期");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("AI 时代就业策略");
@@ -117,6 +119,19 @@ describe("buildDeepSeekPayload", () => {
       `${"培养方案中的计量和统计课程为经济分析提供基础，但课程覆盖不等于已经掌握。".repeat(8)}专业就业去向显示财务分析较常见，因此可优先考虑会计专业人员，并用Python增强数据处理。`,
       evidence
     )).toBe(true);
+  });
+
+  it("rejects curriculum advice that does not name actual courses and potential skills", () => {
+    const evidence = {
+      curriculum: { major: "经济统计学", core_courses: "微观经济学、概率论、数理统计、计量经济学、Python数据分析" },
+      inferredSkills: ["统计分析", "数据分析", "Python"],
+      occupations: [{ name: "数字技术工程技术人员" }]
+    };
+    const generic = `${"培养方案中的课程提供专业基础，但课程覆盖不等于已经掌握，需要转化为项目成果。".repeat(10)}数字技术工程技术人员是可考虑的方向。`;
+    const detailed = `${generic}专业课程与能力基础方面，核心课程包括微观经济学、概率论、数理统计和计量经济学，校内学习可能为统计分析、数据分析提供基础。`;
+
+    expect(isAdequateIndividualCareerAnswer(generic, evidence)).toBe(false);
+    expect(isAdequateIndividualCareerAnswer(detailed, evidence)).toBe(true);
   });
 
   it("rejects AI-related program advice that omits available exposure or cooccurrence evidence", () => {
