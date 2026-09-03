@@ -70,6 +70,8 @@ describe("buildDeepSeekPayload", () => {
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("培养方案推断能力");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("默认回答结构");
     expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("报告式结构");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("只规定本轮必须覆盖的决策内容，不是固定模板");
+    expect(CAREER_ADVISOR_SYSTEM_PROMPT).toContain("不得为了覆盖上述内容机械使用相同的小标题或句式");
   });
 
   it("separates the visible answer from clickable follow-up questions", () => {
@@ -77,5 +79,11 @@ describe("buildDeepSeekPayload", () => {
 
     expect(output.answer).toBe("建议优先学习 SQL。");
     expect(output.suggestedQuestions).toEqual(["SQL会带来哪些职业变化？", "哪些城市更需要这项技能？", "AI会如何影响目标职业？"]);
+  });
+
+  it("normalizes escaped Markdown and literal line breaks", () => {
+    const output = parseCareerAdvisorOutput("\\\\*\\\\*优先建议\\\\*\\\\*\\\\n学习 SQL");
+
+    expect(output.answer).toBe("**优先建议**\n学习 SQL");
   });
 });

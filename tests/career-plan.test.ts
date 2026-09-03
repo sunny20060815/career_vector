@@ -6,7 +6,9 @@ import { parseCareerQuestionLocally } from "@/lib/local-query";
 const catalog = [
   { canonicalName: "Excel", aliases: ["Excel"] },
   { canonicalName: "财务分析", aliases: ["财务分析"] },
-  { canonicalName: "机器学习", aliases: ["机器学习"] }
+  { canonicalName: "机器学习", aliases: ["机器学习"] },
+  { canonicalName: "Python", aliases: ["Python"] },
+  { canonicalName: "统计分析", aliases: ["统计分析"] }
 ];
 
 describe("career evidence planning", () => {
@@ -24,7 +26,18 @@ describe("career evidence planning", () => {
     const question = "计量经济学和机器学习哪个更值得投入？";
     const query = parseCareerQuestionLocally(question, catalog);
     const plan = parseCareerQueryPlan('{"route":"adaptive","answerStyle":"comparison","modules":["skill_pairs"],"focus":"比较技能"}', question, query);
-    expect(plan.modules).toEqual(["skill_pairs", "skill_profiles"]);
-    expect(plan.focus).toBe("比较技能");
+    expect(plan.modules).toEqual(["skill_profiles", "skill_pairs", "occupations"]);
+    expect(plan.focus).toBe("围绕用户给出的选项作直接比较并给出优先级");
+  });
+
+  it("keeps next-skill questions on the complete skill-growth evidence path", () => {
+    const question = "我会 Python 和统计分析，下一步最值得补什么技能？它会怎样改变我的职业、工资与城市选择？";
+    const query = parseCareerQuestionLocally(question, catalog);
+    const plan = parseCareerQueryPlan('{"route":"adaptive","answerStyle":"comparison","modules":["skill_profiles"],"focus":"普通比较"}', question, query);
+
+    expect(plan).toMatchObject({
+      answerStyle: "skill_growth",
+      modules: ["skill_profiles", "skill_pairs", "next_skills", "occupations", "cities"]
+    });
   });
 });

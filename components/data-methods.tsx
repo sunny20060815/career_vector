@@ -82,7 +82,7 @@ export function DataMethods() {
       <section className="method-unit py-8 md:py-10">
         <SectionHeading icon={ShieldCheck} index="05" title="人工智能影响测度" subtitle="结合职业暴露与招聘市场中的实际技能重组" />
         <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_1fr]">
-          <div><p className="text-sm font-medium text-[#d8e0e7]">职业AI能力暴露度</p><p className="mt-3 text-sm leading-7 text-[#87a1b6]">依据O*NET 30.3的52项职业能力，由Kimi、DeepSeek、文心一言、豆包、智谱清言、Gemini、ChatGPT和Grok独立评估生成式AI对各项能力的参与程度，再结合职业对能力的重要性和水平要求加权。894个O*NET职业被映射至我国1,635个具体职业，并汇总到380个职业小类；歧义映射经过人工复核。</p><div className="mt-4 border-l-2 border-[#3e89c6] bg-[#0c294a] px-4 py-3 font-mono text-xs leading-6 text-[#89a3b8]">AI暴露度 = 能力AI评分 × 能力重要性 × 水平要求的加权平均</div></div>
+          <div><p className="text-sm font-medium text-[#d8e0e7]">职业AI能力暴露度</p><p className="mt-3 text-sm leading-7 text-[#87a1b6]">依据O*NET 30.3的52项职业能力，由Kimi、DeepSeek、文心一言、豆包、智谱清言、Gemini、ChatGPT和Grok独立评估生成式AI对各项能力的参与程度，再结合职业对能力的重要性和水平要求加权。894个O*NET职业被映射至我国1,635个具体职业，并汇总到380个职业小类；歧义映射经过人工复核。</p><div className="mt-4 border-l-2 border-[#3e89c6] bg-[#072541] px-4 py-3 font-mono text-xs leading-6 text-[#89a3b8]">AI暴露度 = 能力AI评分 × 能力重要性 × 水平要求的加权平均</div></div>
           <div><p className="text-sm font-medium text-[#d8e0e7]">AI与技能的互补和替代压力</p><p className="mt-3 text-sm leading-7 text-[#87a1b6]">平台比较2019—2022年与2023—2025年技能同AI技能的标准化共现强度，并使用2019—2021年职业结构作为固定权重。AI共现增强且技能需求上升，被识别为互补；AI共现增强但需求下降，被识别为潜在替代压力；共现增强而需求稳定，则进一步判断岗位内部是否发生任务重组。</p><div className="mt-4 flex items-start gap-3 border-l-2 border-[#d98560] bg-[#0d2947] px-4 py-3"><TrendingUp size={16} className="mt-0.5 shrink-0 text-[#df916c]" /><p className="text-xs leading-6 text-[#a4b7c7]">这些指标描述招聘市场中已经显现的能力组合与需求变化，不直接解释为人工智能造成的因果效应。</p></div></div>
         </div>
       </section>
@@ -95,9 +95,9 @@ function SectionHeading({ icon: Icon, index, title, subtitle }: { icon: typeof D
 }
 
 function QualityBlock({ value, label, note }: { value: string; label: string; note: string }) {
-  return <div className="bg-[#0c294a] p-5"><p className="font-serif text-2xl text-[#589ed8]">{value}</p><p className="mt-2 text-xs font-medium text-[#bdcbd7]">{label}</p><p className="mt-1 text-[10px] leading-4 text-[#537087]">{note}</p></div>;
+  return <div className="bg-[#072541] p-5"><p className="font-serif text-2xl text-[#589ed8]">{value}</p><p className="mt-2 text-xs font-medium text-[#bdcbd7]">{label}</p><p className="mt-1 text-[10px] leading-4 text-[#537087]">{note}</p></div>;
 }
 
 function MethodBlock({ title, body }: { title: string; body: string }) {
-  return <div className="bg-[#092441] p-5 md:p-6"><p className="text-sm font-medium text-[#d4dde5]">{title}</p><p className="mt-3 text-xs leading-6 text-[#7290a8]">{body}</p></div>;
+  return <div className="bg-[#061f39] p-5 md:p-6"><p className="text-sm font-medium text-[#d4dde5]">{title}</p><p className="mt-3 text-xs leading-6 text-[#7290a8]">{body}</p></div>;
 }

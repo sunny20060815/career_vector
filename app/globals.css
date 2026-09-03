@@ -4,10 +4,10 @@
 
 :root {
   color-scheme: dark;
-  --surface-page: #061a33;
-  --surface-sidebar: #08213f;
-  --surface-canvas: #071c36;
-  --surface-raised: #0d2a4d;
+  --surface-page: #031326;
+  --surface-sidebar: #041a32;
+  --surface-canvas: #03172d;
+  --surface-raised: #072541;
   --border-slate: #1d4d74;
   --accent-blue: #58a6e7;
   --accent-blue-soft: #0d3d69;
@@ -32,19 +32,19 @@ button { -webkit-tap-highlight-color: transparent; }
 .app-shell {
   background-color: var(--surface-page);
   background-image:
-    linear-gradient(rgba(88, 166, 231, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(88, 166, 231, 0.045) 1px, transparent 1px);
+    linear-gradient(rgba(88, 166, 231, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 166, 231, 0.028) 1px, transparent 1px);
   background-size: 34px 34px;
 }
 
 * {
-  scrollbar-color: #22577f #08213f;
+  scrollbar-color: #22577f #041a32;
   scrollbar-width: thin;
 }
 
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: #08213f; }
-*::-webkit-scrollbar-thumb { background: #22577f; border: 2px solid #08213f; }
+*::-webkit-scrollbar-track { background: #041a32; }
+*::-webkit-scrollbar-thumb { background: #22577f; border: 2px solid #041a32; }
 
 .status-dot {
   display: inline-block;
@@ -57,7 +57,7 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .skill-globe {
   isolation: isolate;
-  background-color: #082b4f;
+  background-color: #05223f;
   background-image:
     linear-gradient(rgba(97, 181, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(97, 181, 255, 0.035) 1px, transparent 1px);

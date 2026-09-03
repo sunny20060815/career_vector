@@ -12,10 +12,10 @@ describe("deep navy application theme", () => {
     const globals = source("app/globals.css");
     const workbench = source("components/career-workbench.tsx");
 
-    expect(globals).toContain("--surface-page: #061a33");
+    expect(globals).toContain("--surface-page: #031326");
     expect(globals).toContain("--accent-blue: #58a6e7");
     expect(globals).not.toContain("background: #060b0c");
-    expect(workbench).toContain("bg-[#061a33]");
+    expect(workbench).toContain("bg-[#031326]");
     expect(workbench).not.toContain("bg-[#060b0c]");
   });
 });

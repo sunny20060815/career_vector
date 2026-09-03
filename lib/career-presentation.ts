@@ -222,9 +222,50 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
   ].join("\n\n");
 }
 
+function formatSkillGrowthFallback(evidence: CareerEvidence): string {
+  const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;
+  const candidate = evidence.nextSkills[0];
+  if (!candidate) {
+    return [
+      "**结论**",
+      "现有关系数据尚不足以可靠地指定唯一下一技能，因此不应为了给出答案而随意推荐。",
+      "**当前可确定的方向**",
+      `你现有的${confirmedSkills.join("和") || "技能"}更适合先围绕${evidence.occupations.slice(0, 2).map((item) => item.name).join("、") || "目标职业"}形成可验证项目；系统会在获得有效候选技能证据后再比较其职业、工资和城市影响。`
+    ].join("\n\n");
+  }
+
+  const alternatives = evidence.nextSkills.slice(1, 3).map((item) => item.skill);
+  const currentCities = new Set(evidence.cities.map((item) => item.city));
+  const occupationsAfter = candidate.occupationsAfter ?? [];
+  const citiesAfter = candidate.citiesAfter ?? [];
+  const addedCities = citiesAfter.filter((city) => !currentCities.has(city));
+  const marketFacts = [
+    candidate.demandPer10k2025 != null ? `2025年需求强度约${candidate.demandPer10k2025.toFixed(1)}个/万岗位` : "",
+    candidate.forecastTrend ? `${evidence.forecastYear}年预测趋势为${candidate.forecastTrend}` : ""
+  ].filter(Boolean).join("，");
+  const salaryText = candidate.salaryMedian2025 != null
+    ? `${candidate.skill}对应岗位当前月薪中位数约${Math.round(candidate.salaryMedian2025)}元。这是技能相关岗位的市场参照，不代表掌握该技能后个人工资会等额提高；在缺少显著工资互补证据时，不能估计组合带来的加薪幅度。`
+    : "目前没有足够数据估计新增技能对应的工资水平，更不能推断个人加薪幅度。";
+  const cityText = citiesAfter.length
+    ? `加入该技能后，综合匹配靠前的城市为${citiesAfter.join("、")}${addedCities.length ? `；相较当前技能排序，新进入前列的城市包括${addedCities.join("、")}` : "，城市名单总体没有发生明显变化"}。`
+    : "目前没有足够的城市数据判断新增技能会怎样改变地域选择。";
+
+  return [
+    "**优先建议**",
+    `下一步优先补充${candidate.skill}。它与现有的${candidate.relatedTo}存在技能关系记录，${marketFacts || "并具有可用的市场需求证据"}。${alternatives.length ? `可比较的备选是${alternatives.join("和")}，但当前综合证据弱于${candidate.skill}。` : ""}`,
+    "**它会改变什么**",
+    `- **职业：** ${occupationsAfter.length ? `加入${candidate.skill}后，综合匹配靠前的方向为${occupationsAfter.join("、")}，说明它主要用于强化这些职业方向的技能覆盖。` : "目前没有足够职业关系数据测算排序变化。"}`,
+    `- **工资：** ${salaryText}`,
+    `- **城市：** ${cityText}`,
+    "**怎么补才有用**",
+    `用${confirmedSkills.slice(0, 2).join("、") || "现有技能"}与${candidate.skill}完成一个完整项目，至少呈现数据或任务处理、方法选择、结果验证和业务解释四个环节，使新增技能成为可核验的求职证据。`
+  ].join("\n\n");
+}
+
 export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = ""): string {
   if (evidence.queryPlan?.answerStyle === "ai_tasks") return formatAiTaskFallback(evidence);
   if (evidence.queryPlan?.answerStyle === "comparison") return formatComparisonFallback(evidence, question);
+  if (evidence.queryPlan?.answerStyle === "skill_growth") return formatSkillGrowthFallback(evidence);
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
   if (curriculum && /课程学习|学习建议|学习规划|课程.*怎么|课程.*如何/.test(question)) return formatCurriculumLearningAnswer(evidence, curriculum);
   const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;

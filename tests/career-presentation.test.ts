@@ -147,4 +147,36 @@ describe("career presentation", () => {
     expect(answer).toContain("没有把计量经济学作为独立标准技能统计");
     expect(answer).toContain("2025年需求强度约60.6个/万岗位");
   });
+
+  it("gives a complete next-skill answer when the model fallback is used", () => {
+    const question = "我会 Python 和统计分析，下一步最值得补什么技能？它会怎样改变我的职业、工资与城市选择？";
+    const query = parseCareerQuestionLocally(question, [
+      { canonicalName: "Python", aliases: ["Python"] },
+      { canonicalName: "统计分析", aliases: ["统计分析"] }
+    ]);
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      recognizedSkills: ["Python", "统计分析"],
+      confirmedSkills: ["Python", "统计分析"],
+      inferredSkills: [],
+      curriculum: null,
+      nextSkills: [{
+        skill: "数据分析",
+        relatedTo: "Python、统计分析",
+        cooccurrence: null,
+        demandPer10k2025: 188.2,
+        salaryMedian2025: 14500,
+        forecastTrend: "温和上升",
+        occupationsAfter: ["数字技术工程技术人员", "软件和信息技术服务人员"],
+        citiesAfter: ["北京", "上海", "深圳", "杭州", "广州"]
+      }],
+      queryPlan: fallbackCareerPlan(question, query)
+    }, question);
+
+    expect(answer).toContain("下一步优先补充数据分析");
+    expect(answer).toContain("数字技术工程技术人员");
+    expect(answer).toContain("不代表掌握该技能后个人工资会等额提高");
+    expect(answer).toContain("北京、上海、深圳、杭州、广州");
+    expect(answer).not.toContain("自行去招聘网站");
+  });
 });

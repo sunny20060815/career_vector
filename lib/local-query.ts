@@ -39,8 +39,9 @@ function extractSalary(question: string): number | null {
 }
 
 function extractIntent(question: string): QueryIntent {
+  if (/下一步.{0,12}(?:补|学|掌握|提升)|补什么技能|学习什么技能|提升什么技能|下一项技能/.test(question)) return "skill_growth";
   if (/对比|比较|相比|区别|哪个|哪一个|哪项|孰优|还是.+更|更值得/.test(question)) return "job_comparison";
-  if (/下一步|补什么|学习|提升/.test(question)) return "skill_growth";
+  if (/学习|提升/.test(question)) return "skill_growth";
   if (/城市|哪里|哪座/.test(question)) return "city_recommendation";
   if (/适合|岗位|职业|工作|转行|想去|去哪/.test(question)) return "career_recommendation";
   return "skill_trend";

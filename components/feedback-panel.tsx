@@ -46,7 +46,7 @@ export function FeedbackPanel({ userIdentity }: { userIdentity: string | null })
   }
 
   if (sent) {
-    return <div ref={rootRef} className="mx-auto flex min-h-[calc(100vh-12rem)] max-w-3xl items-center justify-center py-10"><div className="feedback-unit w-full border border-[#255d86] bg-[#0c294a] p-7 md:p-10"><span className="grid h-12 w-12 place-items-center border border-[#428cc9] bg-[#0c3a67] text-[#67aae0]"><Check size={24} /></span><h1 className="mt-6 font-serif text-3xl text-white">反馈已发送</h1><p className="mt-3 text-sm leading-7 text-[#829db3]">感谢你的反馈，项目团队已收到该问题。</p><button onClick={() => setSent(false)} type="button" className="mt-7 text-sm text-[#64a4d8] transition hover:text-[#94c3ea]">继续提交问题</button></div></div>;
+    return <div ref={rootRef} className="mx-auto flex min-h-[calc(100vh-12rem)] max-w-3xl items-center justify-center py-10"><div className="feedback-unit w-full border border-[#255d86] bg-[#072541] p-7 md:p-10"><span className="grid h-12 w-12 place-items-center border border-[#428cc9] bg-[#0c3a67] text-[#67aae0]"><Check size={24} /></span><h1 className="mt-6 font-serif text-3xl text-white">反馈已发送</h1><p className="mt-3 text-sm leading-7 text-[#829db3]">感谢你的反馈，项目团队已收到该问题。</p><button onClick={() => setSent(false)} type="button" className="mt-7 text-sm text-[#64a4d8] transition hover:text-[#94c3ea]">继续提交问题</button></div></div>;
   }
 
   return (
@@ -55,17 +55,17 @@ export function FeedbackPanel({ userIdentity }: { userIdentity: string | null })
         <p className="text-xs font-semibold tracking-[0.2em] text-[#4594d5]">PRODUCT FEEDBACK</p>
         <h1 className="mt-4 font-serif text-3xl leading-tight text-white md:text-4xl">帮助我们把职向量做得更准确</h1>
         <p className="mt-4 text-sm leading-7 text-[#809bb1]">如果你发现数据、职业匹配或页面功能存在问题，或者对产品有新的想法，请在这里告诉我们。反馈将直接发送给项目团队。</p>
-        <div className="mt-6 border-l-2 border-[#d98560] bg-[#0d2b4e] px-4 py-3 text-xs leading-6 text-[#829db3]">当前登录账号：<span className="text-[#d1dae3]">{userIdentity}</span><br />反馈将与该账号关联，便于后续核查。</div>
+        <div className="mt-6 border-l-2 border-[#d98560] bg-[#072541] px-4 py-3 text-xs leading-6 text-[#829db3]">当前登录账号：<span className="text-[#d1dae3]">{userIdentity}</span><br />反馈将与该账号关联，便于后续核查。</div>
       </section>
 
-      <form onSubmit={(event) => void submit(event)} className="feedback-unit border border-[#255d86] bg-[#092441] p-5 md:p-7">
+      <form onSubmit={(event) => void submit(event)} className="feedback-unit border border-[#255d86] bg-[#061f39] p-5 md:p-7">
         <div className="flex items-center gap-3 border-b border-[#1a4a72] pb-4"><span className="grid h-9 w-9 place-items-center border border-[#39769f] text-[#589ed8]"><MessageSquareWarning size={17} /></span><div><p className="text-sm font-medium text-[#dbe3e9]">提交问题</p><p className="mt-1 text-[10px] tracking-[0.1em] text-[#537088]">DIRECT TO PROJECT TEAM</p></div></div>
         <label className="mt-5 block text-xs text-[#849eb4]" htmlFor="feedback-category">问题类型</label>
-        <select id="feedback-category" value={category} onChange={(event) => setCategory(event.target.value as FeedbackCategory)} className="mt-2 h-11 w-full border border-[#285f88] bg-[#0d2b4e] px-3 text-sm text-[#d5dee6] outline-none focus:border-[#4891cd]">
+        <select id="feedback-category" value={category} onChange={(event) => setCategory(event.target.value as FeedbackCategory)} className="mt-2 h-11 w-full border border-[#285f88] bg-[#072541] px-3 text-sm text-[#d5dee6] outline-none focus:border-[#4891cd]">
           {Object.entries(feedbackCategories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <label className="mt-5 block text-xs text-[#849eb4]" htmlFor="feedback-message">问题描述</label>
-        <textarea id="feedback-message" value={message} onChange={(event) => setMessage(event.target.value)} required minLength={10} maxLength={3000} rows={8} placeholder="请描述你遇到的问题、操作步骤或希望增加的功能……" className="mt-2 block w-full resize-y border border-[#285f88] bg-[#0d2b4e] px-3 py-3 text-sm leading-6 text-[#e1e8ed] outline-none placeholder:text-[#486175] focus:border-[#4891cd]" />
+        <textarea id="feedback-message" value={message} onChange={(event) => setMessage(event.target.value)} required minLength={10} maxLength={3000} rows={8} placeholder="请描述你遇到的问题、操作步骤或希望增加的功能……" className="mt-2 block w-full resize-y border border-[#285f88] bg-[#072541] px-3 py-3 text-sm leading-6 text-[#e1e8ed] outline-none placeholder:text-[#486175] focus:border-[#4891cd]" />
         <div className="mt-2 flex justify-between text-[10px] text-[#4c677d]"><span>至少10个字</span><span>{message.length}/3000</span></div>
         {error && <p className="mt-4 border-l-2 border-[#df7957] bg-[#241512] px-3 py-2 text-xs leading-5 text-[#efaa90]">{error}</p>}
         <button disabled={submitting || message.trim().length < 10} type="submit" className="mt-5 flex h-11 w-full items-center justify-center gap-2 bg-[#3b85c2] text-sm font-semibold text-[#202b3a] transition hover:bg-[#64a8df] disabled:cursor-not-allowed disabled:bg-[#1c4567] disabled:text-[#526e85]"><Send size={15} />{submitting ? "正在发送…" : "发送反馈"}</button>

@@ -10,7 +10,8 @@ const catalog = [
   { canonicalName: "财务分析", aliases: ["财务分析"] },
   { canonicalName: "Excel", aliases: ["Excel"] },
   { canonicalName: "人工智能技术", aliases: ["AI", "人工智能"] },
-  { canonicalName: "机器学习", aliases: ["机器学习"] }
+  { canonicalName: "机器学习", aliases: ["机器学习"] },
+  { canonicalName: "统计分析", aliases: ["统计分析"] }
 ];
 
 describe("parseCareerQuestionLocally", () => {
@@ -69,6 +70,13 @@ describe("parseCareerQuestionLocally", () => {
       skills: ["机器学习"],
       confirmedSkills: [],
       intent: "job_comparison"
+    });
+  });
+
+  it("routes a next-skill question to skill growth before generic comparison", () => {
+    expect(parseCareerQuestionLocally("我会 Python 和统计分析，下一步最值得补什么技能？它会怎样改变我的职业、工资与城市选择？", catalog)).toMatchObject({
+      skills: ["Python", "统计分析"],
+      intent: "skill_growth"
     });
   });
 });

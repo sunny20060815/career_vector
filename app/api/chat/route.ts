@@ -50,6 +50,11 @@ function progressCopy(plan: CareerQueryPlan) {
       writing: "匹配证据已就绪，正在形成职业规划建议...",
       fallback: "生成服务较慢，正在依据职业与技能证据完成建议..."
     },
+    skill_growth: {
+      searching: "正在比较候选技能及其职业、工资与城市证据...",
+      writing: "候选技能证据已就绪，正在评估新增技能的具体影响...",
+      fallback: "生成服务较慢，正在依据技能边际价值完成提升建议..."
+    },
     explanation: {
       searching: "正在读取回答当前问题所需的劳动力市场证据...",
       writing: "相关证据已就绪，正在组织针对性说明...",

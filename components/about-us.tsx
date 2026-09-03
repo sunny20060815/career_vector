@@ -158,7 +158,7 @@ export function AboutUs() {
                   type="button"
                   onClick={() => setSelectedMember(index)}
                   aria-pressed={selectedMember === index}
-                  className={`group flex w-56 shrink-0 snap-start items-center gap-3 border p-2.5 text-left transition lg:w-auto ${selectedMember === index ? "border-[#4b91c6] bg-[#10375e]" : "border-[#1d4c71] bg-[#092441] hover:border-[#326b95] hover:bg-[#0c2b4b]"}`}
+                  className={`group flex w-56 shrink-0 snap-start items-center gap-3 border p-2.5 text-left transition lg:w-auto ${selectedMember === index ? "border-[#4b91c6] bg-[#0d355c]" : "border-[#1d4c71] bg-[#061f39] hover:border-[#326b95] hover:bg-[#082844]"}`}
                 >
                   <span className="relative h-16 w-12 shrink-0 overflow-hidden bg-[#0d3155]">
                     <Image src={person.image} alt="" fill sizes="48px" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 28%" }} />
@@ -188,7 +188,7 @@ function AdvisorCard({ person }: { person: Person }) {
         <span className="absolute inset-x-0 top-0 aspect-[3/4] sm:inset-0 sm:aspect-auto">
           <Image src={person.image} alt={`${person.name}照片`} fill sizes="(max-width: 640px) 100vw, 168px" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 24%" }} />
         </span>
-        <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#071c36]/80 to-transparent sm:hidden" />
+        <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#03172d]/80 to-transparent sm:hidden" />
       </div>
       <div className="p-5 md:p-6">
         <p className="text-[10px] font-semibold tracking-[0.14em] text-[#5ca6df]">ACADEMIC ADVISOR</p>
@@ -207,8 +207,8 @@ function MemberProfile({ ref, person, index, onPrevious, onNext }: { ref: React.
           <span className="absolute inset-x-0 top-0 aspect-[3/4] md:inset-0 md:aspect-auto">
             <Image key={person.image} src={person.image} alt={`${person.name}照片`} fill priority={index < 2} sizes="(max-width: 768px) 100vw, 38vw" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 28%" }} />
           </span>
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#071c36]/85 to-transparent md:hidden" />
-          <span className="absolute left-4 top-4 border border-[#5ca1d4]/50 bg-[#071c36]/85 px-2 py-1 font-mono text-[10px] text-[#8bc2e8]">TEAM {String(index + 1).padStart(2, "0")}</span>
+          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#03172d]/85 to-transparent md:hidden" />
+          <span className="absolute left-4 top-4 border border-[#5ca1d4]/50 bg-[#03172d]/85 px-2 py-1 font-mono text-[10px] text-[#8bc2e8]">TEAM {String(index + 1).padStart(2, "0")}</span>
         </div>
         <div className="flex min-h-0 flex-col p-5 md:p-7">
           <div className="profile-reveal flex items-start justify-between gap-4">

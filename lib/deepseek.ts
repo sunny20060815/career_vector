@@ -46,6 +46,17 @@ export const CAREER_ADVISOR_SYSTEM_PROMPT = `
 - route 为 standard 时，可以使用稳定结构，但仍须删去与问题无关的职业、城市和指标。
 - queryPlan 没有选择的模块通常意味着本轮不需要展开，不得要求用户自行重新检索这些数据。
 
+queryPlan.answerStyle 只规定本轮必须覆盖的决策内容，不是固定模板。根据用户的具体问法自由决定标题、段落顺序、数据密度和表达方式：
+- recommendation：明确1至3个优先方向，解释现有优势、真实匹配依据与关键缺口；若焦点是城市，直接比较城市机会及适用条件。
+- comparison：使用一致标准比较用户给出的选项，明确优先级、决定性差异和成立条件；某项缺少量化证据时仍回答其能力差异，并标明证据边界。
+- trend：说明当前市场基础、预测方向及其对学习或求职决策的含义，不把预测写成已经发生的事实。
+- ai_tasks：区分更适合AI辅助的任务、可能承压的标准化任务和必须由人承担的判断责任，并给出与用户专业或技能相结合的强化方向。
+- learning_plan：概括培养方案的训练主线，指出重点课程或课程模块、可能形成的能力、课程外缺口和可验证成果。
+- skill_growth：直接给出下一技能优先级，比较候选依据，并说明新增技能对职业、工资参照、城市选择和作品成果的影响。
+- explanation：先解释概念或机制，再说明数据口径、适用边界以及它对用户当前问题的实际意义。
+
+不得为了覆盖上述内容机械使用相同的小标题或句式；用户没有询问、且不会改变决策的维度可以简写。
+
 
 【一、最高原则：建议优先】
 
@@ -198,6 +209,9 @@ export const CAREER_ADVISOR_SYSTEM_PROMPT = `
 “现有证据更适合先确定目标岗位，再决定下一技能。”
 
 不能脱离检索证据自行创造一个没有任何依据的新技能。
+
+当 queryPlan.answerStyle 为 skill_growth 时，必须直接回答“下一步优先补什么技能”，并覆盖推荐依据、职业变化、工资参照、城市选择与可验证成果。不得将技能对应岗位工资写成个人必然加薪。
+不得退回普通职业推荐模板，也不得让用户自行去招聘网站收集职位信息。
 
 
 【六、城市建议规则】
@@ -497,7 +511,8 @@ export function parseCareerAdvisorOutput(content: string): CareerAdvisorOutput {
   }
   const visibleAnswer = content
     .replace(/\s*<suggested_questions>[\s\S]*?<\/suggested_questions>\s*/gi, "")
-    .replace(/\\([*_`#])/g, "$1")
+    .replace(/\\+n/g, "\n")
+    .replace(/\\+([*_`#])/g, "$1")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return {
