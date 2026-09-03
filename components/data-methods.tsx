@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { BriefcaseBusiness, Database, Layers3, Network, ShieldCheck, TrendingUp } from "lucide-react";
 import gsap from "gsap";
+import { SkillNetwork } from "@/components/skill-network";
 
 const dataStats = [
   { value: "899.61万+", label: "原始招聘信息", note: "2014—2026.03" },
@@ -77,6 +78,7 @@ export function DataMethods() {
           <MethodBlock title="未来市场前景" body="将技能组合的工资互补效应与2026—2028年需求变化、需求增长率和城市覆盖相结合，区分高回报是否同时对应需求扩张与空间扩散。" />
           <MethodBlock title="多技能输入" body="用户输入任意数量的技术技能、非技术技能和专业知识后，系统同时计算单项价值、已观测组合关系及新增技能的边际价值，而不是将多项技能压缩为单一标签。" />
         </div>
+        <SkillNetwork />
       </section>
 
       <section className="method-unit py-8 md:py-10">
