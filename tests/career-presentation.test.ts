@@ -139,7 +139,7 @@ describe("career presentation", () => {
       queryPlan: { route: "adaptive", answerStyle: "skill_growth", modules: ["curriculum", "major_destinations", "next_skills"], focus: "下一技能" }
     }, "下一步学什么");
 
-    for (const answer of [learning, target, growth]) expect(answer).toContain("毕业去向资料显示");
+    for (const answer of [learning, target, growth]) expect(answer).toContain("依据阳光高考网公布的专业就业去向资料");
   });
 
   it("does not present zero-value pair or next-skill evidence", () => {
@@ -204,6 +204,29 @@ describe("career presentation", () => {
     expect(answer).toContain("优先验证数据库技术、数据分析、Linux");
     expect(answer).toContain("课程外补充");
     expect(answer).toContain("AI辅助方式");
+  });
+
+  it("keeps an explicit cross-major target above broad destination priors", () => {
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      occupations: [{ code: "20603", name: "会计专业人员", score: 99, matchedSkills: [], observedPairCount: 0 }],
+      majorIdentity: { inputMajorName: "经济统计学", standardMajorName: "经济统计学", standardMajorCode: "020102" },
+      majorDestinations: [{
+        occupationCode: "2-06-03", occupationName: "会计专业人员", destinationName: "财务助理", destinationShare: 3.7,
+        displayRank: 1, directionType: "已毕业人员从业方向", dataScope: "专业类", destinationTier: "核心去向", mappingConfidence: "高"
+      }],
+      requestedOccupations: ["数字技术工程技术人员"],
+      targetOccupationSkills: [
+        { occupationName: "数字技术工程技术人员", skill: "数据分析", forecastDemandShare: 0.3, concentration: 1, userHasSkill: false },
+        { occupationName: "数字技术工程技术人员", skill: "Python", forecastDemandShare: 0.2, concentration: 1, userHasSkill: true }
+      ],
+      curriculum: { ...evidence.curriculum, major: "经济统计学" }
+    }, "我是首经贸2024级经济统计学学生，想进入数字技术相关职业。请结合培养方案和岗位需求，给我一份分阶段学习建议。");
+
+    expect(answer).toContain("建议围绕数字技术工程技术人员");
+    expect(answer).toContain("依据阳光高考网公布的专业就业去向资料");
+    expect(answer).toContain("但你已明确选择数字技术工程技术人员");
+    expect(answer).not.toContain("建议围绕会计专业人员");
   });
 
   it("keeps observed pair value before recommending the next skill", () => {

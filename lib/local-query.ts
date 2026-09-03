@@ -18,6 +18,14 @@ export interface LocalOccupationCatalogEntry {
   aliases: readonly string[];
 }
 
+export const BUILTIN_OCCUPATION_ALIASES: Record<string, readonly string[]> = {
+  "数字技术工程技术人员": ["数字技术", "数字技术相关职业", "人工智能工程师", "大数据工程师", "云计算工程师", "物联网工程师", "智能制造工程师"],
+  "软件和信息技术服务人员": ["软件开发", "软件测试", "程序员", "数据库运维", "信息技术服务"],
+  "会计专业人员": ["会计", "财务会计"],
+  "统计专业人员": ["统计分析师", "统计师"],
+  "销售人员": ["销售", "销售岗位"]
+};
+
 const KNOWN_CITIES = [
   "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "成都", "武汉", "西安", "重庆", "天津",
   "长沙", "郑州", "厦门", "青岛", "宁波", "佛山", "东莞", "合肥", "济南", "大连", "沈阳", "昆明"
@@ -115,11 +123,28 @@ export function parseCareerQuestionLocally(
   })).filter((candidate) => candidate.matchLength > 0).sort((left, right) => right.matchLength - left.matchLength || right.program.cohort.localeCompare(left.program.cohort));
   const matchedProgram = candidates[0]?.program ?? null;
   const hasOccupationContext = /职业|岗位|工作|就业|求职|转行|方向|从事|进入|想做|希望做|准备做/.test(question);
-  const occupationKeywords = Array.from(new Set(occupations
-    .filter((occupation) => [occupation.subclassName, ...(hasOccupationContext ? occupation.aliases : [])].some((name) => {
-      const token = normalise(name);
-      return token.length > 2 && normalisedQuestion.includes(token);
-    }))
+  const aliasesByOccupation = new Map<string, Set<string>>();
+  for (const occupation of [
+    ...occupations,
+    ...Object.entries(BUILTIN_OCCUPATION_ALIASES).map(([subclassName, aliases]) => ({ subclassName, aliases }))
+  ]) {
+    const aliases = aliasesByOccupation.get(occupation.subclassName) ?? new Set<string>();
+    occupation.aliases.forEach((alias) => aliases.add(alias));
+    aliasesByOccupation.set(occupation.subclassName, aliases);
+  }
+  const occupationPool = Array.from(aliasesByOccupation, ([subclassName, aliases]) => ({ subclassName, aliases: Array.from(aliases) }));
+  const occupationKeywords = Array.from(new Set(occupationPool
+    .filter((occupation) => {
+      const shortenedName = occupation.subclassName.replace(/(?:工程技术人员|专业人员|服务人员|生产人员|从业人员|工作人员|技术人员|人员)$/, "");
+      const namedMatch = [occupation.subclassName, ...occupation.aliases].some((name) => {
+        const token = normalise(name);
+        const minimumLength = name === occupation.subclassName ? 3 : 2;
+        return token.length >= minimumLength && normalisedQuestion.includes(token) && (name === occupation.subclassName || hasOccupationContext);
+      });
+      const shortToken = normalise(shortenedName);
+      const contextualShortMatch = shortToken.length >= 2 && ["相关职业", "职业", "岗位", "方向", "工作"].some((suffix) => normalisedQuestion.includes(`${shortToken}${suffix}`));
+      return namedMatch || contextualShortMatch;
+    })
     .sort((left, right) => normalise(right.subclassName).length - normalise(left.subclassName).length)
     .map((occupation) => occupation.subclassName))).slice(0, 3);
 

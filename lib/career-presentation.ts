@@ -126,8 +126,14 @@ function majorDestinationSentence(evidence: CareerEvidence): string {
   if (!rows.length) return "";
   const names = Array.from(new Set(rows.filter((row) => row.destinationTier !== "通用去向").map((row) => row.destinationName))).slice(0, 5);
   const classLevel = rows.some((row) => row.dataScope !== "专业");
+  const requested = evidence.requestedOccupations ?? [];
+  if (requested.length) {
+    return names.length
+      ? `依据阳光高考网公布的专业就业去向资料，该专业${classLevel ? "或所属专业类" : ""}较常见的方向包括${names.join("、")}；但你已明确选择${requested.join("、")}，本次将以该目标为主，专业去向仅用于判断原有基础与转向所需补齐的能力。`
+      : `你已明确选择${requested.join("、")}，本次将以该目标为主，专业背景仅用于判断原有基础与需要补齐的能力。`;
+  }
   return names.length
-    ? `毕业去向资料显示，该专业${classLevel ? "或所属专业类" : ""}较常见的方向包括${names.join("、")}；本次职业排序先以这些专业相关方向为边界，再用个人确认技能区分具体路径。`
+    ? `依据阳光高考网公布的专业就业去向资料，该专业${classLevel ? "或所属专业类" : ""}较常见的方向包括${names.join("、")}；本次职业排序先以这些专业相关方向为边界，再用个人确认技能区分具体路径。`
     : "本次职业排序已使用专业就业去向作为先验约束，避免通用或工具技能脱离专业背景主导推荐。";
 }
 
@@ -244,7 +250,7 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
   const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((course) => course.trim()).filter(Boolean);
   const quantitative = courses.filter((course) => /统计|计量|数学|预测|数据|编程|模型|算法|机器学习|人工智能/.test(course)).slice(0, 4);
   const theory = courses.filter((course) => !quantitative.includes(course)).slice(0, 4);
-  const occupation = evidence.targetOccupationSkills?.[0]?.occupationName || evidence.occupations[0]?.name || "目标职业";
+  const occupation = evidence.requestedOccupations?.[0] || evidence.targetOccupationSkills?.[0]?.occupationName || evidence.occupations[0]?.name || "目标职业";
   const occupationSkills = (evidence.targetOccupationSkills ?? []).filter((item) => item.occupationName === occupation).slice(0, 10);
   const confirmed = new Set(evidence.confirmedSkills ?? []);
   const professionalSkills = occupationSkills.filter((item) => !/沟通|团队|责任|学习|抗压|协调|表达|英语/.test(item.skill)).slice(0, 6);
@@ -377,7 +383,7 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
     "**核心判断**",
     standardMajorLine,
     `${cohort}${major}应继续以专业定位和主要就业去向为培养主轴，课程供给、招聘技能和${evidence.forecastYear}年预测只用于检验与校准这条主轴。${digitalCourses.length ? `方案已包含${digitalCourses.slice(0, 4).join("、")}，这些工具应用于增强${major.replace(/（.*?）/g, "")}专业工作，不应反过来将人才培养定位导向纯技术职业。` : ""}`,
-    destinationNames.length ? `专业就业去向显示，相关方向主要包括${destinationNames.join("、")}。后续的课程与技能调整均应优先回应这些专业路径。` : "当前未取得可用的专业就业去向，以下职业对应仅作为待复核的市场信号。",
+    destinationNames.length ? `依据阳光高考网公布的专业就业去向资料，相关方向主要包括${destinationNames.join("、")}。后续的课程与技能调整均应优先回应这些专业路径。` : "当前未取得可用的专业就业去向，以下职业对应仅作为待复核的市场信号。",
     "**课程结构与岗位接口**",
     theoryCourses.length ? `- 专业理论：${theoryCourses.join("、")}，支撑问题定义、机制解释与专业判断。` : "",
     methodCourses.length ? `- 定量方法：${methodCourses.join("、")}，需要向数据处理、方法选择和结果解释连续衔接。` : "",

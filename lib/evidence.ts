@@ -1,5 +1,5 @@
 import { normaliseSkillToken } from "@/lib/query";
-import { parseCareerQuestionLocally, type LocalOccupationCatalogEntry, type LocalProgramCatalogEntry, type LocalSkillCatalogEntry } from "@/lib/local-query";
+import { BUILTIN_OCCUPATION_ALIASES, parseCareerQuestionLocally, type LocalOccupationCatalogEntry, type LocalProgramCatalogEntry, type LocalSkillCatalogEntry } from "@/lib/local-query";
 import { localAiCooccurrence } from "@/lib/ai-cooccurrence-local";
 import { localOccupationEvidence, localProgramCatalog, localProgramEvidence, localProgramSeriesEvidence } from "@/lib/curriculum-local";
 import { localMajorDestinationPriors, resolveLocalMajor } from "@/lib/major-destinations-local";
@@ -82,6 +82,7 @@ export interface CareerEvidence {
   queryPlan?: CareerQueryPlan;
   queriedModules?: CareerEvidenceModule[];
   targetOccupationSkills?: TargetOccupationSkill[];
+  requestedOccupations?: string[];
   pairCities?: PairCityEvidence[];
 }
 
@@ -97,14 +98,6 @@ const LOCAL_SUPPORTED_PAIRS: Row[] = [{
   demand_growth_pct: 44.20964355736825,
   evidence_level: "稳健子技能互补"
 }];
-
-const COMMON_OCCUPATION_ALIASES: Record<string, string[]> = {
-  "数字技术工程技术人员": ["数字技术", "人工智能工程师", "大数据工程师", "云计算工程师", "物联网工程师", "智能制造工程师"],
-  "软件和信息技术服务人员": ["软件开发", "软件测试", "程序员", "数据库运维", "信息技术服务"],
-  "会计专业人员": ["会计", "财务会计"],
-  "统计专业人员": ["统计分析师", "统计师"],
-  "销售人员": ["销售", "销售岗位"]
-};
 
 function text(row: Row, key: string): string {
   return typeof row[key] === "string" ? row[key] : "";
@@ -189,7 +182,7 @@ export async function parseCareerQuestionFromCatalog(question: string): Promise<
           const shortName = occupationName.replace(/^计算机/, "").replace(/(?:工程技术人员|专业人员|技术人员|管理员|操作员|设计员|服务员|分析师|工程师)$/, "");
           if (shortName.length >= 4) current.add(shortName);
         }
-        for (const alias of COMMON_OCCUPATION_ALIASES[subclassName] ?? []) current.add(alias);
+        for (const alias of BUILTIN_OCCUPATION_ALIASES[subclassName] ?? []) current.add(alias);
         aliasesByOccupation.set(subclassName, current);
       }
       const occupationCatalog = Array.from(aliasesByOccupation, ([subclassName, occupationAliases]) => ({ subclassName, aliases: Array.from(occupationAliases) }));
@@ -276,7 +269,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   if (targetOccupationError) console.warn("Target occupation skills are unavailable", targetOccupationError.message);
   let targetOccupationSkills = rankTargetOccupationSkills((targetOccupationRows ?? []) as Row[], recognizedSkills, query.forecastYear);
   if (!recognizedSkills.length && !majorDestinations.length) {
-    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], majorDestinations, majorIdentity, curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills };
+    return { forecastYear: query.forecastYear, recognizedSkills: [], unresolvedSkills, profiles: [], occupations: [], cities: [], nextSkills: [], observedPairCount: 0, observedPairs: [], aiExposureDetails: [], aiCooccurrenceSource: "none", preferenceNotes: targetOccupationSkills.length ? [] : ["暂无可识别的技能记录"], confirmedSkills: [], inferredSkills: [], majorDestinations, majorIdentity, curriculum: null, occupationDetails: [], queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, requestedOccupations: query.occupationKeywords };
   }
 
   const profileFields = `canonical_name,display_name,skill_type,demand_per_10k_2025,salary_median_2025,experience_mean_2025,bachelor_or_above_share_2025,graduate_share_2025,forecast_2026,forecast_2027,forecast_2028,fact_summary${needsAi ? ",ai_exposure,ai_group,ai_cooccurrence_npmi,ai_cooccurrence_share" : ""}`;
@@ -452,7 +445,7 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
         }))
       }))
     : [];
-  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, majorDestinations, majorIdentity, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, curriculumVersions, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, pairCities };
+  return { forecastYear: query.forecastYear, recognizedSkills, unresolvedSkills, profiles: ((profiles ?? []) as Row[]).map((row) => profileView(row, query.forecastYear, effectiveAiCooccurrence)), occupations: rankedOccupations, cities, nextSkills, observedPairCount: observedPairIds.length, observedPairs, aiExposureDetails, aiCooccurrenceSource, preferenceNotes, confirmedSkills, inferredSkills, majorDestinations, majorIdentity, curriculum: effectiveProgramRow ? { ...effectiveProgramRow, skillEvidence: effectiveMajorSkillRows, note: "培养方案推断技能表示课程和培养要求覆盖的能力，不等于用户已经掌握。" } : null, curriculumVersions, occupationDetails: groupOccupationDetails(effectiveOccupationCatalogRows), queryPlan, queriedModules: Array.from(modules), targetOccupationSkills, requestedOccupations: query.occupationKeywords, pairCities };
 }
 
 function rankTargetOccupationSkills(rows: Row[], userSkills: string[], forecastYear: number): TargetOccupationSkill[] {

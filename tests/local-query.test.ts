@@ -110,4 +110,20 @@ describe("parseCareerQuestionLocally", () => {
       [{ subclassName: "数字技术工程技术人员", aliases: ["人工智能工程师", "大数据工程师"] }]
     )).toMatchObject({ occupationKeywords: ["数字技术工程技术人员"], intent: "career_recommendation" });
   });
+
+  it("recognizes a broad target direction even when the database catalog is unavailable", () => {
+    expect(parseCareerQuestionLocally(
+      "我是首经贸2024级经济统计学学生，想进入数字技术相关职业。请结合培养方案和岗位需求，给我一份分阶段学习建议。",
+      catalog
+    )).toMatchObject({ occupationKeywords: ["数字技术工程技术人员"], intent: "career_recommendation" });
+  });
+
+  it("derives concise target aliases for every occupation subclass", () => {
+    expect(parseCareerQuestionLocally(
+      "我是统计学专业学生，想进入审计相关职业。",
+      catalog,
+      [],
+      [{ subclassName: "审计专业人员", aliases: [] }]
+    )).toMatchObject({ occupationKeywords: ["审计专业人员"], intent: "career_recommendation" });
+  });
 });
