@@ -135,7 +135,7 @@ describe("parseCareerQuestionLocally", () => {
       [{ subclassName: "数字技术工程技术人员", aliases: ["人工智能工程技术人员", "大数据工程技术人员"] }]
     );
 
-    expect(query.occupationKeywords).toEqual([]);
+    expect(query.occupationKeywords).toEqual(["数字技术工程技术人员"]);
     expect(query.occupationCandidates?.[0]).toBe("数字技术工程技术人员");
   });
 });

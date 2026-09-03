@@ -56,7 +56,7 @@ function extractOccupationTarget(question: string): string | null {
   return match?.[1]?.trim() || null;
 }
 
-function rankOccupationCandidates(target: string, skills: string[], occupations: LocalOccupationCatalogEntry[]): string[] {
+function rankOccupationCandidates(target: string, skills: string[], occupations: LocalOccupationCatalogEntry[]): Array<{ name: string; score: number }> {
   const terms = [target, ...skills].filter(Boolean);
   return occupations
     .map((occupation) => ({
@@ -65,8 +65,7 @@ function rankOccupationCandidates(target: string, skills: string[], occupations:
     }))
     .filter((candidate) => candidate.score >= 0.34)
     .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name, "zh-CN"))
-    .map((candidate) => candidate.name)
-    .filter((name, index, values) => values.indexOf(name) === index)
+    .filter((candidate, index, values) => values.findIndex((item) => item.name === candidate.name) === index)
     .slice(0, 12);
 }
 
@@ -168,7 +167,7 @@ export function parseCareerQuestionLocally(
     aliasesByOccupation.set(occupation.subclassName, aliases);
   }
   const occupationPool = Array.from(aliasesByOccupation, ([subclassName, aliases]) => ({ subclassName, aliases: Array.from(aliases) }));
-  const occupationKeywords = Array.from(new Set(occupationPool
+  const lexicalOccupationKeywords = Array.from(new Set(occupationPool
     .filter((occupation) => {
       const shortenedName = occupation.subclassName.replace(/(?:工程技术人员|专业人员|服务人员|生产人员|从业人员|工作人员|技术人员|人员)$/, "");
       const namedMatch = [occupation.subclassName, ...occupation.aliases].some((name) => {
@@ -182,8 +181,14 @@ export function parseCareerQuestionLocally(
     })
     .sort((left, right) => normalise(right.subclassName).length - normalise(left.subclassName).length)
     .map((occupation) => occupation.subclassName))).slice(0, 3);
-  const occupationTarget = occupationKeywords.length ? null : extractOccupationTarget(question);
-  const occupationCandidates = occupationTarget ? rankOccupationCandidates(occupationTarget, skills, occupationPool) : [];
+  const occupationTarget = lexicalOccupationKeywords.length ? null : extractOccupationTarget(question);
+  const rankedOccupationCandidates = occupationTarget ? rankOccupationCandidates(occupationTarget, skills, occupationPool) : [];
+  const [bestCandidate, secondCandidate] = rankedOccupationCandidates;
+  const confidentSemanticTarget = bestCandidate?.score >= 0.72 && (!secondCandidate || bestCandidate.score - secondCandidate.score >= 0.12)
+    ? [bestCandidate.name]
+    : [];
+  const occupationKeywords = lexicalOccupationKeywords.length ? lexicalOccupationKeywords : confidentSemanticTarget;
+  const occupationCandidates = rankedOccupationCandidates.map((candidate) => candidate.name);
 
   return {
     skills,
