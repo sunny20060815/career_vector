@@ -380,6 +380,7 @@ function AnswerContent({ content }: { content: string }) {
   const normalized = content
     .replace(/\\+n/g, "\n")
     .replace(/\\+([*_`#])/g, "$1")
+    .replace(/^(\s*\d+)\\+\.\s*/gm, "$1. ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   const blocks = normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean);

@@ -84,8 +84,8 @@ describe("buildDeepSeekPayload", () => {
   });
 
   it("normalizes escaped Markdown and literal line breaks", () => {
-    const output = parseCareerAdvisorOutput("\\\\*\\\\*优先建议\\\\*\\\\*\\\\n学习 SQL");
+    const output = parseCareerAdvisorOutput("\\\\*\\\\*优先建议\\\\*\\\\*\\\\n1\\\\. 学习 SQL");
 
-    expect(output.answer).toBe("**优先建议**\n学习 SQL");
+    expect(output.answer).toBe("**优先建议**\n1. 学习 SQL");
   });
 });

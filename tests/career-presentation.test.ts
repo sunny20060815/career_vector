@@ -65,6 +65,7 @@ describe("career presentation", () => {
       confirmedSkills: ["Python", "药学"],
       observedPairCount: 1,
       observedPairs: [{
+        id: "pair-zero",
         skillA: "Python",
         skillB: "药学",
         cooccurrence: 0,
@@ -98,13 +99,79 @@ describe("career presentation", () => {
   });
 
   it("creates a curriculum-based learning path when the model is unavailable", () => {
-    const answer = formatFallbackCareerAnswer(evidence, "请结合培养方案给我一份课程学习建议");
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      targetOccupationSkills: [
+        { occupationName: "软件和信息技术服务人员", skill: "沟通能力", forecastDemandShare: 0.527, concentration: 1, userHasSkill: false },
+        { occupationName: "软件和信息技术服务人员", skill: "数据库技术", forecastDemandShare: 0.136, concentration: 2, userHasSkill: false },
+        { occupationName: "软件和信息技术服务人员", skill: "Python", forecastDemandShare: 0.098, concentration: 2, userHasSkill: true },
+        { occupationName: "软件和信息技术服务人员", skill: "数据分析", forecastDemandShare: 0.097, concentration: 2, userHasSkill: false },
+        { occupationName: "软件和信息技术服务人员", skill: "Linux", forecastDemandShare: 0.097, concentration: 2, userHasSkill: false }
+      ]
+    }, "培养方案中的哪些课程最有助于进入软件和信息技术服务人员？");
 
     expect(answer).toContain("**课程学习建议**");
-    expect(answer).toContain("专业理论—定量工具—综合应用");
+    expect(answer).toContain("专业理论—定量工具—岗位应用");
+    expect(answer).toContain("**目标职业需要什么**");
+    expect(answer).toContain("数据库技术（约13.6%）");
+    expect(answer).toContain("Python（约9.8%）");
+    expect(answer).toContain("数据分析（约9.7%）");
+    expect(answer).toContain("同时也重视沟通能力");
     expect(answer).toContain("统计学、计量经济学、经济预测");
+    expect(answer).toContain("优先验证数据库技术、数据分析、Linux");
     expect(answer).toContain("课程外补充");
     expect(answer).toContain("AI辅助方式");
+  });
+
+  it("keeps observed pair value before recommending the next skill", () => {
+    const question = "我会 TPM 和设备管理，这组技能有工资互补价值吗？未来适合哪些职业和城市，下一步还应补什么技能？";
+    const query = parseCareerQuestionLocally(question, [
+      { canonicalName: "TPM", aliases: ["TPM"] },
+      { canonicalName: "设备管理", aliases: ["设备管理"] }
+    ]);
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      recognizedSkills: ["TPM", "设备管理"],
+      confirmedSkills: ["TPM", "设备管理"],
+      curriculum: null,
+      observedPairCount: 1,
+      observedPairs: [{
+        id: "ZH01389",
+        skillA: "TPM",
+        skillB: "设备管理",
+        cooccurrence: 0.426568,
+        wageComplementPct: 9.0631,
+        wageComplementPValue: 0.0487,
+        demandRate2025: 0.00084196,
+        demandRate2028: 0.00121418,
+        demandGrowthPct: 44.2096,
+        evidenceLevel: "稳健子技能互补"
+      }],
+      pairCities: [
+        { pairId: "ZH01389", city: "深圳", probability: 0.2, concentration: 1 },
+        { pairId: "ZH01389", city: "上海", probability: 0.4, concentration: 1 },
+        { pairId: "other", city: "错误城市", probability: 0.9, concentration: 1 }
+      ],
+      nextSkills: [{
+        skill: "安全生产",
+        relatedTo: "设备管理",
+        cooccurrence: 0.2,
+        demandPer10k2025: 342.7,
+        salaryMedian2025: 10000,
+        forecastTrend: "基本稳定",
+        occupationsAfter: ["机械工程技术人员", "生产现场技术工艺人员"],
+        citiesAfter: ["荆门", "九江", "宜宾"]
+      }],
+      queryPlan: fallbackCareerPlan(question, query)
+    }, question);
+
+    expect(answer).toContain("存在直接观测到的工资互补证据");
+    expect(answer).toContain("互补效应约9.1%");
+    expect(answer).toContain("增幅约44.2%");
+    expect(answer).toContain("上海、深圳");
+    expect(answer).toContain("下一步优先补充安全生产");
+    expect(answer).not.toContain("缺少显著工资互补证据");
+    expect(answer).not.toContain("错误城市");
   });
 
   it("keeps AI task questions focused when the model fallback is used", () => {

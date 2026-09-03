@@ -17,6 +17,7 @@ export function buildEvidencePreview(evidence: CareerEvidence): EvidencePreview 
   if (selected.has("cities")) sources.push("city_skill_forecasts");
   if (selected.has("skill_pairs") || selected.has("next_skills")) sources.push("skill_pairs");
   if (evidence.observedPairs.length && selected.has("occupations")) sources.push("pair_occupation_stats");
+  if (evidence.pairCities?.length) sources.push("pair_city_stats");
   if (evidence.curriculum) sources.push("major_programs", "major_skills");
   if (evidence.occupationDetails?.length) sources.push("occupation_catalog");
   if (evidence.aiExposureDetails.length) sources.push("skill_ai_exposure");
@@ -206,19 +207,33 @@ function formatCurriculumLearningAnswer(evidence: CareerEvidence, curriculum: Re
   const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((course) => course.trim()).filter(Boolean);
   const quantitative = courses.filter((course) => /统计|计量|数学|预测|数据|编程|模型|算法|机器学习|人工智能/.test(course)).slice(0, 4);
   const theory = courses.filter((course) => !quantitative.includes(course)).slice(0, 4);
-  const occupation = evidence.occupations[0]?.name || "目标职业";
+  const occupation = evidence.targetOccupationSkills?.[0]?.occupationName || evidence.occupations[0]?.name || "目标职业";
+  const occupationSkills = (evidence.targetOccupationSkills ?? []).filter((item) => item.occupationName === occupation).slice(0, 10);
+  const confirmed = new Set(evidence.confirmedSkills ?? []);
+  const professionalSkills = occupationSkills.filter((item) => !/沟通|团队|责任|学习|抗压|协调|表达|英语/.test(item.skill)).slice(0, 6);
+  const commonSkills = occupationSkills.filter((item) => !professionalSkills.includes(item)).slice(0, 3);
+  const missingSkills = professionalSkills.filter((item) => !confirmed.has(item.skill)).slice(0, 4);
   const nextSkill = evidence.nextSkills.find((item) => item.cooccurrence !== null && Math.abs(item.cooccurrence) >= 0.01)?.skill;
+  const shareText = professionalSkills.slice(0, 4).map((item) => item.forecastDemandShare !== null
+    ? `${item.skill}（约${(item.forecastDemandShare * 100).toFixed(1)}%）`
+    : item.skill).join("、");
   return [
     "**课程学习建议**",
-    `建议围绕${occupation}建立“专业理论—定量工具—综合应用”的学习主线。培养方案中的课程覆盖只能说明学校提供了训练基础，最终仍需要通过项目成果证明你能够独立应用。`,
+    `建议围绕${occupation}建立“专业理论—定量工具—岗位应用”的学习主线。培养方案提供的是能力基础，真正影响求职的是能否把课程方法转化为目标职业可识别的项目成果。`,
+    "**目标职业需要什么**",
+    occupationSkills.length
+      ? `${evidence.forecastYear}年预测中，该方向较常出现的专业技能包括${shareText}${commonSkills.length ? `，同时也重视${commonSkills.map((item) => item.skill).join("、")}等通用能力` : ""}。括号内为技能在该职业岗位中的预测需求占比，不是个人求职成功率。`
+      : "当前未取得该职业的细分技能排序，以下先依据培养方案安排学习主线，不虚构具体岗位技能。",
     "**学习顺序**",
-    `1. 先吃透${theory.slice(0, 3).join("、") || "专业基础课程"}，重点训练问题定义、理论解释和专业判断。`,
-    `2. 再强化${quantitative.join("、") || "定量与工具课程"}，把公式和方法转化为可复现的数据分析过程。`,
-    `3. 最后完成一个面向${occupation}的综合项目，形成“问题提出—数据处理—分析验证—结果解释”的完整作品。`,
+    `1. 先吃透${theory.slice(0, 3).join("、") || "专业基础课程"}，训练问题定义、理论解释和专业判断，使技术工作能够落到真实业务问题上。`,
+    `2. 再强化${quantitative.join("、") || "定量与工具课程"}，把公式和方法转化为可复现的数据清洗、分析与验证过程。`,
+    `3. 最后完成一个面向${occupation}的综合项目，呈现“问题提出—数据处理—方法选择—结果核验—业务解释”的完整链条。`,
     "**课程外补充**",
-    nextSkill ? `${nextSkill}与现有能力存在直接共现证据，可作为优先验证的补充技能。` : "现有证据不足以确定唯一的下一技能，建议先围绕目标职业完成课程项目，再根据项目中的真实缺口补充工具。",
+    missingSkills.length
+      ? `对照目标职业技能画像，建议优先验证${missingSkills.map((item) => item.skill).join("、")}。其中先选1-2项与课程项目结合，不要把技能名单平均用力。${nextSkill && !missingSkills.some((item) => item.skill === nextSkill) ? `${nextSkill}与现有能力另有直接共现证据，可作为备选。` : ""}`
+      : nextSkill ? `${nextSkill}与现有能力存在直接共现证据，可作为优先验证的补充技能。` : "现有证据不足以确定唯一的下一技能，应先把已有课程能力转化为可验证成果。",
     "**AI辅助方式**",
-    "可以使用AI辅助资料梳理、代码解释、调试和初步结果检查，但问题设定、数据质量判断、方法选择与结果解释应由你自己完成，并在作品集中明确人工核验过程。"
+    `可以使用AI辅助资料梳理、代码解释、调试和初步结果检查；问题设定、数据质量判断、方法选择、结果解释与最终责任仍应由你完成。作品集中应明确展示AI做了什么、你如何核验，以及错误输出是怎样被发现和修正的。`
   ].join("\n\n");
 }
 
@@ -244,14 +259,27 @@ function formatSkillGrowthFallback(evidence: CareerEvidence): string {
     candidate.forecastTrend ? `${evidence.forecastYear}年预测趋势为${candidate.forecastTrend}` : ""
   ].filter(Boolean).join("，");
   const salaryText = candidate.salaryMedian2025 != null
-    ? `${candidate.skill}对应岗位当前月薪中位数约${Math.round(candidate.salaryMedian2025)}元。这是技能相关岗位的市场参照，不代表掌握该技能后个人工资会等额提高；在缺少显著工资互补证据时，不能估计组合带来的加薪幅度。`
+    ? `${candidate.skill}对应岗位当前月薪中位数约${Math.round(candidate.salaryMedian2025)}元。这是技能相关岗位的市场参照，不代表掌握该技能后个人工资会等额提高；现有数据也未估计它加入原组合后的额外工资变化。`
     : "目前没有足够数据估计新增技能对应的工资水平，更不能推断个人加薪幅度。";
   const cityText = citiesAfter.length
     ? `加入该技能后，综合匹配靠前的城市为${citiesAfter.join("、")}${addedCities.length ? `；相较当前技能排序，新进入前列的城市包括${addedCities.join("、")}` : "，城市名单总体没有发生明显变化"}。`
     : "目前没有足够的城市数据判断新增技能会怎样改变地域选择。";
 
+  const confirmed = new Set(confirmedSkills);
+  const observedPair = evidence.observedPairs.filter((pair) => confirmed.has(pair.skillA) && confirmed.has(pair.skillB)).find(isMeaningfulPair);
+  const pairDemand = observedPair && observedPair.demandRate2025 !== null && observedPair.demandRate2028 !== null
+    ? `组合需求率预计由2025年的${(observedPair.demandRate2025 * 100).toFixed(3)}%升至${evidence.forecastYear}年的${(observedPair.demandRate2028 * 100).toFixed(3)}%${observedPair.demandGrowthPct !== null ? `，增幅约${observedPair.demandGrowthPct.toFixed(1)}%` : ""}`
+    : "";
+  const pairCities = (evidence.pairCities ?? [])
+    .filter((item) => item.pairId === observedPair?.id)
+    .sort((left, right) => (right.probability ?? 0) - (left.probability ?? 0))
+    .slice(0, 5)
+    .map((item) => item.city);
   return [
-    "**优先建议**",
+    observedPair ? "**现有组合判断**" : "**优先建议**",
+    observedPair ? `${pairSentence(observedPair)}${pairDemand ? `${pairDemand}。` : ""}` : "",
+    observedPair && pairCities.length ? `该组合历史岗位覆盖靠前的城市为${pairCities.join("、")}；这是组合岗位的空间分布依据，不等同于未来增长排名。` : "",
+    "**下一技能建议**",
     `下一步优先补充${candidate.skill}。它与现有的${candidate.relatedTo}存在技能关系记录，${marketFacts || "并具有可用的市场需求证据"}。${alternatives.length ? `可比较的备选是${alternatives.join("和")}，但当前综合证据弱于${candidate.skill}。` : ""}`,
     "**它会改变什么**",
     `- **职业：** ${occupationsAfter.length ? `加入${candidate.skill}后，综合匹配靠前的方向为${occupationsAfter.join("、")}，说明它主要用于强化这些职业方向的技能覆盖。` : "目前没有足够职业关系数据测算排序变化。"}`,
@@ -266,9 +294,9 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = 
   if (evidence.queryPlan?.answerStyle === "ai_tasks") return formatAiTaskFallback(evidence);
   if (evidence.queryPlan?.answerStyle === "comparison") return formatComparisonFallback(evidence, question);
   if (evidence.queryPlan?.answerStyle === "skill_growth") return formatSkillGrowthFallback(evidence);
-  if (evidence.targetOccupationSkills?.length) return formatTargetOccupationFallback(evidence);
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
-  if (curriculum && /课程学习|学习建议|学习规划|课程.*怎么|课程.*如何/.test(question)) return formatCurriculumLearningAnswer(evidence, curriculum);
+  if (curriculum && /课程|学习建议|学习规划/.test(question)) return formatCurriculumLearningAnswer(evidence, curriculum);
+  if (evidence.targetOccupationSkills?.length) return formatTargetOccupationFallback(evidence);
   const confirmedSkills = evidence.confirmedSkills ?? evidence.recognizedSkills;
   const confirmedSet = new Set(confirmedSkills);
   const inferredSkills = (evidence.inferredSkills ?? []).filter((skill) => !confirmedSet.has(skill));

@@ -218,6 +218,7 @@ queryPlan.answerStyle 只规定本轮必须覆盖的决策内容，不是固定�
 - 同时兼顾专业技术技能和真正重要的通用能力，不要让沟通、责任心等通用词淹没专业技能；
 - forecastDemandShare 表示该技能在目标职业中的预测需求占比，可用于判断常用程度，不得解释为个人进入该职业的概率；
 - 根据用户现有能力指出 2-4 项优先补齐项，不要只抄写技能名单，也不要再次泛泛推荐其他职业。
+- 如果问题同时涉及培养方案，必须进一步说明哪些课程支撑上述职业技能、哪些技能尚未被用户确认掌握，以及如何通过课程项目形成可验证成果；不能只给通用的课程学习顺序。
 
 
 【六、城市建议规则】
@@ -303,6 +304,8 @@ AI 暴露较高不等于职业会被替代。若暴露度和需求证据同时�
 【九、技能组合】
 
 只有存在真实直接观测组合证据时，才可以讨论技能组合的市场表现。
+
+当用户询问现有技能组合及下一技能时，回答顺序必须是：先使用 observedPairs 判断现有组合的工资互补、共现和需求前景，再评估 nextSkills。不能因为新增候选技能缺少工资互补数据，就否定现有组合已经存在的显著互补证据。pairCities 只表示该组合历史岗位的城市分布，不得写成未来增长城市排名。
 
 如果组合证据非常弱、需求接近零、指标没有实际决策价值，就不要为了“完整”而单独输出。
 
@@ -521,6 +524,7 @@ export function parseCareerAdvisorOutput(content: string): CareerAdvisorOutput {
     .replace(/\s*<suggested_questions>[\s\S]*?<\/suggested_questions>\s*/gi, "")
     .replace(/\\+n/g, "\n")
     .replace(/\\+([*_`#])/g, "$1")
+    .replace(/^(\s*\d+)\\+\.\s*/gm, "$1. ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return {
@@ -587,7 +591,7 @@ export async function planCareerQuestion(question: string, query: ParsedCareerQu
 }
 
 export async function writeCareerAnswer(question: string, evidence: object): Promise<CareerAdvisorOutput> {
-  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 38_000) });
+  const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 45_000) });
   const output = parseCareerAdvisorOutput(content);
   return { ...output, answer: limitCareerAnswer(output.answer) };
 }
