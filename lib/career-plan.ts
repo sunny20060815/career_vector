@@ -29,8 +29,14 @@ function uniqueModules(modules: CareerEvidenceModule[]): CareerEvidenceModule[] 
   return Array.from(new Set(modules));
 }
 
+function isProfileIntroduction(question: string, query: ParsedCareerQuery): boolean {
+  return Boolean(query.programKey && query.confirmedSkills?.length)
+    && !/趋势|需求|工资|薪资|前景|城市|哪里|课程|学习|提升|下一步|补什么|AI|人工智能|辅助|替代|影响|冲击|互补|组合|比较|哪个|哪项|适合|岗位|职业|工作|就业|求职|转行|如何|怎么|为什么|多少/.test(question);
+}
+
 export function fallbackCareerPlan(question: string, query: ParsedCareerQuery): CareerQueryPlan {
   const hasProgram = Boolean(query.programKey);
+  const isProfile = isProfileIntroduction(question, query);
   const isLearningPlan = /课程学习|学习建议|学习规划|培养方案.*(?:课程|学习)|课程.*(?:怎么|如何|建议)/.test(question);
   const isAiTask = /(?:AI|人工智能).{0,16}(?:辅助|替代|影响|冲击|任务|渗透|暴露)/i.test(question);
   const isComparison = query.intent === "job_comparison" || /对比|比较|相比|哪个|哪项|更值得|还是/.test(question);
@@ -38,6 +44,9 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery): 
   const isCity = query.intent === "city_recommendation" || /城市|哪里|哪座/.test(question);
   const isCareer = query.intent === "career_recommendation" || query.occupationKeywords.length > 0;
 
+  if (isProfile) {
+    return { route: "standard", answerStyle: "recommendation", modules: uniqueModules(["curriculum", "skill_profiles", "occupations", "next_skills", "cities", "ai_impact", "occupation_catalog"]), focus: "结合培养方案与用户确认技能生成综合职业规划" };
+  }
   if (isLearningPlan) {
     return { route: "standard", answerStyle: "learning_plan", modules: uniqueModules(["curriculum", "skill_profiles", "occupations", "next_skills", "ai_impact"]), focus: "结合培养方案与岗位证据生成学习路径" };
   }
@@ -61,6 +70,7 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery): 
 
 export function parseCareerQueryPlan(content: string, question: string, query: ParsedCareerQuery): CareerQueryPlan {
   const fallback = fallbackCareerPlan(question, query);
+  const profileIntroduction = isProfileIntroduction(question, query);
   const match = content.match(/\{[\s\S]*\}/);
   if (!match) return fallback;
   try {
@@ -71,7 +81,7 @@ export function parseCareerQueryPlan(content: string, question: string, query: P
     const parsedAnswerStyle = typeof parsed.answerStyle === "string" && answerStyles.has(parsed.answerStyle as CareerAnswerStyle)
       ? parsed.answerStyle as CareerAnswerStyle
       : fallback.answerStyle;
-    const guarded = guardedAnswerStyles.has(fallback.answerStyle);
+    const guarded = guardedAnswerStyles.has(fallback.answerStyle) || profileIntroduction;
     const structured = guarded || query.intent === "career_recommendation" || query.intent === "city_recommendation";
     const answerStyle = guarded ? fallback.answerStyle : parsedAnswerStyle;
     const route = guarded ? fallback.route : parsed.route === "standard" || parsed.route === "adaptive" ? parsed.route : fallback.route;
@@ -108,6 +118,7 @@ export const CAREER_PLANNER_PROMPT = `
 
 route 使用 standard 或 adaptive。结构稳定的职业推荐、城市推荐和课程学习方案可用 standard；比较、下一技能、解释、AI任务影响以及其他个性化问题优先使用 adaptive。
 answerStyle 只能使用 recommendation、comparison、trend、ai_tasks、learning_plan、skill_growth、explanation。
+当用户只是陈述学校、年级、专业和自己会的技能，没有明确询问下一技能、比较、趋势或其他单项问题时，应选择 recommendation，并调用 curriculum、skill_profiles、occupations、cities、ai_impact 等模块形成综合规划；不得自行改成 skill_growth。
 只选择回答当前问题真正需要的模块，通常2至5个。输出严格JSON，不要Markdown，不要解释：
 {"route":"adaptive","answerStyle":"comparison","modules":["skill_profiles","skill_pairs"],"focus":"比较两项技能的就业投入优先级"}
 `;

@@ -8,10 +8,30 @@ const catalog = [
   { canonicalName: "财务分析", aliases: ["财务分析"] },
   { canonicalName: "机器学习", aliases: ["机器学习"] },
   { canonicalName: "Python", aliases: ["Python"] },
+  { canonicalName: "Stata", aliases: ["Stata"] },
   { canonicalName: "统计分析", aliases: ["统计分析"] }
 ];
 
 describe("career evidence planning", () => {
+  it("keeps a program and skill introduction on the comprehensive recommendation route", () => {
+    const question = "我是首经贸2024级经济学（实验班）专业的学生，我会Stata";
+    const query = parseCareerQuestionLocally(question, catalog, [{
+      programKey: "cueb-2024-economics-experimental",
+      school: "首都经济贸易大学",
+      cohort: "2024级",
+      major: "经济学（实验班）",
+      aliases: ["经济学实验班"]
+    }]);
+    const plan = parseCareerQueryPlan('{"route":"adaptive","answerStyle":"skill_growth","modules":["skill_pairs","next_skills"],"focus":"推荐下一技能"}', question, query);
+
+    expect(plan).toMatchObject({
+      route: "standard",
+      answerStyle: "recommendation",
+      focus: "结合培养方案与用户确认技能生成综合职业规划"
+    });
+    expect(plan.modules).toEqual(expect.arrayContaining(["curriculum", "skill_profiles", "occupations", "cities", "ai_impact"]));
+  });
+
   it("uses the adaptive AI task route and only requests relevant modules", () => {
     const question = "我会财务分析和 Excel，AI 更可能辅助还是替代哪些工作任务？";
     const query = parseCareerQuestionLocally(question, catalog);

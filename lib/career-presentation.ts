@@ -385,8 +385,11 @@ export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = 
   }
 
   const preferredCities = evidence.cities.filter((city) => city.preferred).slice(0, 3);
-  if (preferredCities.length) {
-    reasonLines.push(`地域上可优先比较${preferredCities.map((city) => city.city).join("、")}，这些城市与当前技能和已表达偏好更匹配。`);
+  const relevantCities = preferredCities.length ? preferredCities : evidence.cities.slice(0, 3);
+  if (relevantCities.length) {
+    reasonLines.push(preferredCities.length
+      ? `地域上可优先比较${relevantCities.map((city) => city.city).join("、")}，这些城市与当前技能和已表达偏好更匹配。`
+      : `按当前技能需求匹配，${relevantCities.map((city) => city.city).join("、")}可作为优先比较的城市；城市排序反映岗位与技能需求，不替代对生活成本和个人偏好的判断。`);
   }
 
   const usefulNextSkills = evidence.nextSkills

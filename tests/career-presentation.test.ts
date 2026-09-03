@@ -59,6 +59,32 @@ describe("career presentation", () => {
     expect(answer.length).toBeLessThan(1200);
   });
 
+  it("treats a program and confirmed skill statement as a comprehensive profile", () => {
+    const question = "我是首经贸2024级经济学（实验班）专业的学生，我会Stata";
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      recognizedSkills: ["Stata", "Excel"],
+      confirmedSkills: ["Stata"],
+      inferredSkills: ["Excel"],
+      profiles: [{ displayName: "Stata", skill: "Stata", salaryMedian2025: 12500, demandPer10k2025: 0.4, aiExposure: 72.8, forecast: { trend: "基本稳定" } }],
+      nextSkills: [{ skill: "Office办公软件", relatedTo: "Excel", cooccurrence: 0.8 }],
+      queryPlan: {
+        route: "standard",
+        answerStyle: "recommendation",
+        modules: ["curriculum", "skill_profiles", "occupations", "next_skills", "cities", "ai_impact", "occupation_catalog"],
+        focus: "结合培养方案与用户确认技能生成综合职业规划"
+      }
+    }, question);
+
+    expect(answer).toContain("经济学+Stata");
+    expect(answer).toContain("培养方案以");
+    expect(answer).toContain("Stata");
+    expect(answer).toContain("AI时代下");
+    expect(answer).toContain("可优先比较上海");
+    expect(answer).not.toContain("下一步优先补充Office办公软件");
+    expect(answer).not.toContain("**它会改变什么**");
+  });
+
   it("does not present zero-value pair or next-skill evidence", () => {
     const answer = formatFallbackCareerAnswer({
       ...evidence,
