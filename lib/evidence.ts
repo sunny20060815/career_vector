@@ -330,11 +330,14 @@ export async function retrieveCareerEvidence(query: ParsedCareerQuery, queryPlan
   const skillRankedOccupations = rankOccupations(rankingSkills, occupationStats, pairOccupationStats);
   const rankedOccupations = applyMajorDestinationPriors(skillRankedOccupations, majorDestinations, query.occupationKeywords.length === 0);
   if (!targetOccupationSkills.length && needsOccupations && rankedOccupations[0] && (modules.has("next_skills") || queryPlan?.answerStyle === "learning_plan" || curriculumDesign)) {
+    const inferredOccupationNames = rankedOccupations
+      .slice(0, curriculumDesign ? 3 : 1)
+      .map((row) => row.name);
     const { data: inferredTargetRows, error: inferredTargetError } = await admin.from("occupation_skill_stats")
       .select(`canonical_name,occupation_name,concentration,forecast_demand_${query.forecastYear}`)
-      .eq("occupation_name", rankedOccupations[0].name)
+      .in("occupation_name", inferredOccupationNames)
       .order(`forecast_demand_${query.forecastYear}`, { ascending: false })
-      .limit(12);
+      .limit(curriculumDesign ? 36 : 12);
     if (inferredTargetError) console.warn("Inferred target occupation skills are unavailable", inferredTargetError.message);
     targetOccupationSkills = rankTargetOccupationSkills((inferredTargetRows ?? []) as Row[], confirmedSkills, query.forecastYear);
   }

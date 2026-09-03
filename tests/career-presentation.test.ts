@@ -73,17 +73,24 @@ describe("career presentation", () => {
         { cohort: "2023级", skillEvidence: [{ canonical_name: "统计分析" }] },
         { cohort: "2025级", skillEvidence: [{ canonical_name: "统计分析" }, { canonical_name: "人工智能技术" }] }
       ],
+      majorDestinations: [{
+        occupationCode: "2-06-03", occupationName: "会计专业人员", destinationName: "财务分析", destinationShare: 3.7,
+        displayRank: 1, directionType: "已毕业人员从业方向", dataScope: "专业", destinationTier: "核心去向", mappingConfidence: "高"
+      }],
       targetOccupationSkills: [
         { occupationName: "数字技术工程技术人员", skill: "统计分析", forecastDemandShare: 0.3, concentration: 1, userHasSkill: true },
         { occupationName: "数字技术工程技术人员", skill: "Python", forecastDemandShare: 0.2, concentration: 1, userHasSkill: false }
       ]
     });
 
-    expect(answer).toContain("**诊断结论**");
+    expect(answer).toContain("**核心判断**");
+    expect(answer).toContain("应继续以专业定位和主要就业去向为培养主轴");
+    expect(answer).toContain("财务分析");
     expect(answer).toContain("**历年方案变化**");
     expect(answer).toContain("人工智能技术");
     expect(answer).toContain("**修订建议**");
     expect(answer).toContain("不能单独决定培养方案");
+    expect(answer).not.toContain("2024级级");
     expect(answer).not.toContain("如果以就业为目标，我会优先考虑");
   });
 

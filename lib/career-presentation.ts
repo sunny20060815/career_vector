@@ -95,6 +95,13 @@ function profileName(profile: Record<string, unknown>): string {
   return String(profile.displayName || profile.skill || "相关技能");
 }
 
+function curriculumCourseNames(curriculum: Record<string, unknown>): string[] {
+  const raw = String(curriculum.core_courses || "");
+  const quoted = Array.from(raw.matchAll(/《([^》]+)》/g), (match) => match[1].trim());
+  const names = quoted.length ? quoted : raw.split(/[、，,；;\n]/).map((item) => item.trim());
+  return Array.from(new Set(names.filter((item) => item && !/主干学科|核心课程|专业知识图谱/.test(item))));
+}
+
 function curriculumSentence(curriculum: Record<string, unknown>, inferredSkills: string[]): string {
   const courses = String(curriculum.core_courses || "")
     .split(/[、，,；;\n]/)
@@ -328,16 +335,25 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
   if (!curriculum) return formatNoDataCareerAnswer("", "curriculum_designer");
   const major = String(curriculum.major || "该专业");
   const cohort = String(curriculum.cohort || "当前年级");
-  const courses = String(curriculum.core_courses || "").split(/[、，,；;\n]/).map((item) => item.trim()).filter(Boolean);
+  const courses = curriculumCourseNames(curriculum);
+  const theoryCourses = courses.filter((course) => /经济学|财政学|金融学|会计学|管理学|法学|教育学|新闻学|社会学/.test(course) && !/数学|计量|统计|数据|人工智能|机器学习/.test(course)).slice(0, 6);
+  const methodCourses = courses.filter((course) => /数学|计量|统计|预测|实验|研究方法/.test(course)).slice(0, 6);
+  const digitalCourses = courses.filter((course) => /Python|数据|人工智能|机器学习|编程|计算机/.test(course)).slice(0, 6);
   const supplied = new Set(evidence.inferredSkills ?? evidence.recognizedSkills);
-  const target = evidence.occupations.slice(0, 2).map((item) => item.name);
+  const target = evidence.occupations.slice(0, 3).map((item) => item.name);
   const destinationNames = Array.from(new Set((evidence.majorDestinations ?? [])
     .filter((item) => item.destinationTier !== "通用去向")
     .map((item) => item.destinationName))).slice(0, 6);
   const targetRows = evidence.targetOccupationSkills ?? [];
-  const targetSkills = Array.from(new Set(targetRows.map((item) => item.skill))).slice(0, 10);
+  const targetSkills = Array.from(new Set(targetRows.map((item) => item.skill))).slice(0, 12);
   const covered = targetSkills.filter((skill) => supplied.has(skill));
-  const gaps = targetSkills.filter((skill) => !supplied.has(skill)).slice(0, 5);
+  const gaps = targetSkills.filter((skill) => !supplied.has(skill)).slice(0, 6);
+  const occupationSkillLines = target.map((occupation) => {
+    const skills = targetRows.filter((item) => item.occupationName === occupation).slice(0, 5).map((item) => item.forecastDemandShare !== null
+      ? `${item.skill}（${evidence.forecastYear}年${(item.forecastDemandShare * 100).toFixed(1)}%）`
+      : item.skill);
+    return skills.length ? `- ${occupation}：${skills.join("、")}` : "";
+  }).filter(Boolean);
   const rising = evidence.profiles.filter((profile) => {
     const forecast = typeof profile.forecast === "object" && profile.forecast ? profile.forecast as Record<string, unknown> : {};
     return typeof forecast.trend === "string" && /上升|增长/.test(forecast.trend);
@@ -351,24 +367,28 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
     const firstSkills = skillNames(first);
     const latestSkills = skillNames(latest);
     const additions = Array.from(latestSkills).filter((skill) => !firstSkills.has(skill)).slice(0, 5);
-    versionLine = `已对照${versions.map((version) => String(version.cohort || "")).join("、")}级方案。${additions.length ? `相较最早版本，最新版本的代表性能力中新增或更突出${additions.join("、")}；这一变化仍需结合课程学分和教学内容复核。` : "各年级代表性技能供给总体延续，暂未识别出足以支持结构性变化判断的新增能力。"}`;
+    versionLine = `已对照${versions.map((version) => String(version.cohort || "")).join("、")}方案。${additions.length ? `相较最早版本，最新版本新增或更突出${additions.join("、")}；这一变化仍需结合学分、大纲和实际作业复核。` : "各年级代表性能力供给总体延续，暂未识别出结构性变化。"}`;
   }
   return [
-    "**诊断结论**",
-    `${cohort}级${major}已形成以${courses.slice(0, 6).join("、") || "专业基础与方法课程"}为代表的课程主线。课程文本可映射出${Array.from(supplied).slice(0, 8).join("、") || "若干专业能力"}等潜在技能供给，但这反映培养覆盖，不等同于学生实际掌握。`,
-    destinationNames.length ? `专业就业去向资料显示，相关毕业或从业方向包括${destinationNames.join("、")}。课程调整应优先服务这些专业主路径，再评估数字工具对专业工作的增强作用。` : "当前未取得可用的专业就业去向资料，职业对应仅作为待复核的招聘市场信号。",
-    "**岗位需求对应**",
-    target.length ? `当前课程供给较适合对接${target.join("、")}。${targetSkills.length ? `这些方向较常见的技能包括${targetSkills.join("、")}。` : "当前尚未取得职业内部技能排序。"}` : "现有证据尚不足以确定主要对接职业，应先明确专业培养定位后再缩小比较范围。",
-    covered.length ? `其中课程能力映射已覆盖${covered.join("、")}。` : "在当前代表性技能口径下，课程供给与目标职业高频技能尚未形成明确交集。",
-    gaps.length ? `较值得进一步核查的能力缺口是${gaps.join("、")}；“缺口”表示未被培养方案文本稳定识别，并不等于课程实际没有教学。` : "未识别出明确的高频技能缺口，下一步应重点检查教学深度和成果评价。",
+    "**核心判断**",
+    `${cohort}${major}应继续以专业定位和主要就业去向为培养主轴，课程供给、招聘技能和${evidence.forecastYear}年预测只用于检验与校准这条主轴。${digitalCourses.length ? `方案已包含${digitalCourses.slice(0, 4).join("、")}，这些工具应用于增强${major.replace(/（.*?）/g, "")}专业工作，不应反过来将人才培养定位导向纯技术职业。` : ""}`,
+    destinationNames.length ? `专业就业去向显示，相关方向主要包括${destinationNames.join("、")}。后续的课程与技能调整均应优先回应这些专业路径。` : "当前未取得可用的专业就业去向，以下职业对应仅作为待复核的市场信号。",
+    "**课程结构与岗位接口**",
+    theoryCourses.length ? `- 专业理论：${theoryCourses.join("、")}，支撑问题定义、机制解释与专业判断。` : "",
+    methodCourses.length ? `- 定量方法：${methodCourses.join("、")}，需要向数据处理、方法选择和结果解释连续衔接。` : "",
+    digitalCourses.length ? `- 数字工具：${digitalCourses.join("、")}，应与专业课共建案例，避免变成孤立的软件操作训练。` : "",
+    occupationSkillLines.length ? `结合专业去向后，相关职业的高频技能信号为：\n${occupationSkillLines.join("\n")}` : target.length ? `已识别${target.join("、")}等专业相关职业，但尚缺可用的职业内部技能排序。` : "现有证据尚不足以确定主要对接职业。",
+    covered.length ? `培养方案文本已能稳定识别${covered.join("、")}等能力覆盖。` : "当前文本映射尚未显示课程供给与目标职业高频技能的稳定交集，应复核课程大纲和实际作业。",
+    gaps.length ? `建议优先核查${gaps.join("、")}的课程承载情况。“未覆盖”仅指方案文本未稳定识别，不等于实际没有教学。` : "未识别出明确的高频技能缺口，应转向检查教学深度与学习成果。",
     rising.length ? `${rising.join("、")}在${evidence.forecastYear}年预测中呈上升趋势，可作为课程实践内容调整的市场信号。` : "现有预测证据未形成需要单独强调的上升技能清单。",
     "**历年方案变化**",
     versionLine,
     "**修订建议**",
-    `1. 保留能够支撑学科基础和长期迁移能力的核心理论课程，避免仅依据短期招聘热度删减基础训练。`,
-    `2. ${gaps.length ? `围绕${gaps.slice(0, 3).join("、")}优先核查现有课程覆盖；能由既有课程承接的，采用模块整合和案例更新，而非简单增设课程。` : "将修订重点由增加课程数量转向课程衔接、项目深度和学习成果评价。"}`,
-    `3. 建立跨课程实践项目，让学生完成“专业问题定义—数据或任务处理—结果核验—业务解释”，并将作品质量纳入能力达成评价。`,
-    "4. 将AI工具嵌入资料检索、代码辅助和初步分析，同时强化数据质量判断、方法选择、结果解释、伦理与责任边界。",
+    `1. **保留主干。** 保留${theoryCourses.slice(0, 4).join("、") || "核心理论课"}等学科基础，不依据短期岗位热度机械压缩。`,
+    `2. **重组方法链。** 将${methodCourses.slice(0, 3).join("、") || "定量方法课"}${digitalCourses.length ? `与${digitalCourses.slice(0, 3).join("、")}` : ""}按“原理—数据—模型—解释”衔接；${gaps.length ? `围绕${gaps.slice(0, 3).join("、")}先核查现有课程，能由既有课程承接的优先更新模块和案例。` : "重点增强课程联动和项目深度。"}`,
+    `3. **建设专业场景项目。** 围绕${destinationNames.slice(0, 3).join("、") || "主要专业去向"}设置跨课程任务，要求学生完成“专业问题定义—数据处理—方法选择—结果核验—业务或政策解释”的完整成果。`,
+    "4. **嵌入AI协作。** 可用AI辅助检索、代码解释和初步分析，但将数据质量、模型设定、结果可复现性、专业解释和伦理边界列为必须由学生完成的考核项。",
+    "5. **改造成果评价。** 以可复现代码、数据说明、分析报告和口头答辩组成成果档案，分别评价专业判断、方法应用、工具使用和沟通表达，避免用“设置了课程”代替“学生达成了能力”。",
     "**证据边界**",
     "本诊断使用的招聘样本主要来自上市公司及集团公司，适合提供岗位需求与技能变化信号，但不能单独决定培养方案；最终修订还应结合专业定位、师资条件、课程学分和学生长期发展目标审议。"
   ].filter(Boolean).join("\n\n");
