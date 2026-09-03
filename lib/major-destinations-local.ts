@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parse } from "csv-parse/sync";
@@ -12,6 +12,7 @@ const FILE = path.join(process.cwd(), "data", "02_关系表", "13_专业职业�
 let cache: CsvRow[] | undefined;
 
 function rows(): CsvRow[] {
+  if (!existsSync(FILE)) return [];
   cache ??= parse(readFileSync(FILE, "utf8"), {
     columns: true,
     bom: true,
