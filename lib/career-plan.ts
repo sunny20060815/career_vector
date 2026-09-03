@@ -80,7 +80,14 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery, a
 }
 
 export function parseCareerQueryPlan(content: string, question: string, query: ParsedCareerQuery, audience: UserAudience = "individual"): CareerQueryPlan {
-  const fallback = fallbackCareerPlan(question, query, audience);
+  const deterministicTargets = query.occupationKeywords.length
+    ? query.occupationKeywords
+    : (query.occupationCandidates ?? []).slice(0, 1);
+  const fallback = {
+    ...fallbackCareerPlan(question, query, audience),
+    occupationTargets: deterministicTargets,
+    occupationTargetConfidence: deterministicTargets.length ? (query.occupationKeywords.length ? 1 : 0.7) : 0
+  };
   const profileIntroduction = isProfileIntroduction(question, query);
   const match = content.match(/\{[\s\S]*\}/);
   if (!match) return fallback;
@@ -97,7 +104,7 @@ export function parseCareerQueryPlan(content: string, question: string, query: P
     const answerStyle = guarded ? fallback.answerStyle : parsedAnswerStyle;
     const route = guarded ? fallback.route : parsed.route === "standard" || parsed.route === "adaptive" ? parsed.route : fallback.route;
     const confidence = typeof parsed.occupationTargetConfidence === "number" ? parsed.occupationTargetConfidence : 0;
-    const allowedTargets = new Set(query.occupationCandidates ?? []);
+    const allowedTargets = new Set([...(query.occupationCandidates ?? []), ...(query.occupationOptions ?? [])]);
     const semanticTargets = confidence >= 0.72 && Array.isArray(parsed.occupationTargets)
       ? parsed.occupationTargets.filter((item): item is string => typeof item === "string" && allowedTargets.has(item)).slice(0, 3)
       : [];
@@ -113,8 +120,8 @@ export function parseCareerQueryPlan(content: string, question: string, query: P
       answerStyle,
       modules: uniqueModules(required.length ? required : fallback.modules),
       focus: guarded ? fallback.focus : typeof parsed.focus === "string" && parsed.focus.trim() ? parsed.focus.trim().slice(0, 120) : fallback.focus,
-      occupationTargets: query.occupationKeywords.length ? query.occupationKeywords : semanticTargets,
-      occupationTargetConfidence: query.occupationKeywords.length ? 1 : semanticTargets.length ? confidence : 0
+      occupationTargets: query.occupationKeywords.length ? query.occupationKeywords : semanticTargets.length ? semanticTargets : deterministicTargets,
+      occupationTargetConfidence: query.occupationKeywords.length ? 1 : semanticTargets.length ? confidence : deterministicTargets.length ? 0.7 : 0
     };
   } catch {
     return fallback;
@@ -139,7 +146,7 @@ route 使用 standard 或 adaptive。结构稳定的职业推荐、城市推荐�
 answerStyle 只能使用 recommendation、comparison、trend、ai_tasks、learning_plan、skill_growth、explanation。
 当使用身份为“培养方案制定者”时，必须选择 curriculum_design，并调用 curriculum、skill_profiles、occupations、ai_impact；根据问题可增加 skill_pairs 和 occupation_catalog。此时回答目标是诊断课程能力供给与岗位需求的对应关系，而不是给学生做个人求职推荐。
 当用户只是陈述学校、年级、专业和自己会的技能，没有明确询问下一技能、比较、趋势或其他单项问题时，应选择 recommendation，并调用 curriculum、skill_profiles、occupations、cities、ai_impact 等模块形成综合规划；不得自行改成 skill_growth。
-已识别结构中的 occupationCandidates 是根据用户目标表述、已识别技能和职业大典召回的候选职业小类。仅当用户明确表达想进入、从事或转向某类职业时，才能从中选择1至3项写入 occupationTargets；不得因用户的专业名称或课程名称自行推断职业目标。occupationTargetConfidence 使用0至1的小数：语义明确时应不低于0.72，存在歧义时应低于0.72并返回空数组。occupationTargets 只能使用 occupationCandidates 中的原文，不得创造名称。
+已识别结构中的 occupationCandidates 是根据用户目标表述召回的优先候选；occupationOptions 是本地无法高置信度判断时提供的职业大典标准职业小类全集。仅当用户明确表达想进入、从事或转向某类职业时，才能优先从 occupationCandidates、必要时从 occupationOptions 中选择1至3项写入 occupationTargets；不得因用户的专业名称或课程名称自行推断职业目标。occupationTargetConfidence 使用0至1的小数：语义明确时应不低于0.72，存在歧义时应低于0.72并返回空数组。occupationTargets 只能使用上述候选中的原文，不得创造名称。
 只选择回答当前问题真正需要的模块，通常2至5个。输出严格JSON，不要Markdown，不要解释：
 {"route":"adaptive","answerStyle":"comparison","modules":["skill_profiles","skill_pairs"],"focus":"比较两项技能的就业投入优先级","occupationTargets":[],"occupationTargetConfidence":0}
 `;

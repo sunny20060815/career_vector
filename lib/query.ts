@@ -28,7 +28,7 @@ function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function stringArray(value: unknown, field: string): string[] {
+function stringArray(value: unknown, field: string, limit = 12): string[] {
   if (value === undefined) {
     return [];
   }
@@ -37,7 +37,7 @@ function stringArray(value: unknown, field: string): string[] {
     throw new Error(`${field} 必须是字符串数组`);
   }
 
-  return Array.from(new Set(value.map((item) => item.trim()).filter(Boolean))).slice(0, 12);
+  return Array.from(new Set(value.map((item) => item.trim()).filter(Boolean))).slice(0, limit);
 }
 
 function nullableNumber(value: unknown, field: string): number | null {
@@ -73,6 +73,7 @@ export function mergeCareerQueryContext(current: ParsedCareerQuery, previous?: P
     confirmedSkills: Array.from(new Set([...(previous.confirmedSkills ?? previous.skills), ...(current.confirmedSkills ?? [])])).slice(0, 12),
     occupationKeywords: hasCurrentOccupationTarget ? current.occupationKeywords : previous.occupationKeywords,
     occupationCandidates: current.occupationCandidates?.length ? current.occupationCandidates : previous.occupationCandidates,
+    occupationOptions: current.occupationOptions?.length ? current.occupationOptions : undefined,
     cities: current.cities.length ? current.cities : previous.cities,
     salaryMinYuan: current.salaryMinYuan ?? previous.salaryMinYuan,
     salaryMaxYuan: current.salaryMaxYuan ?? previous.salaryMaxYuan,
@@ -116,6 +117,7 @@ export function validateParsedCareerQuery(value: unknown): ParsedCareerQuery {
     confirmedSkills: stringArray(value.confirmedSkills, "用户确认技能"),
     occupationKeywords: stringArray(value.occupationKeywords, "职业关键词"),
     occupationCandidates: stringArray(value.occupationCandidates, "职业候选"),
+    occupationOptions: stringArray(value.occupationOptions, "职业选项", 500),
     cities: stringArray(value.cities, "城市"),
     salaryMinYuan,
     salaryMaxYuan,

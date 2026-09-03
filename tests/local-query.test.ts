@@ -155,4 +155,19 @@ describe("parseCareerQuestionLocally", () => {
     expect(query.occupationKeywords).toEqual(["数字技术工程技术人员"]);
     expect(query.occupationCandidates?.[0]).toBe("数字技术工程技术人员");
   });
+
+  it("offers the full standard occupation set when a free-text target has no lexical overlap", () => {
+    const query = parseCareerQuestionLocally(
+      "我想进入芯片研发相关职业，请给我学习建议。",
+      catalog,
+      [],
+      [
+        { subclassName: "电子工程技术人员", aliases: ["集成电路工程技术人员"] },
+        { subclassName: "数字技术工程技术人员", aliases: ["人工智能工程技术人员"] }
+      ]
+    );
+
+    expect(query.occupationKeywords).toEqual([]);
+    expect(query.occupationOptions).toEqual(["电子工程技术人员", "数字技术工程技术人员", "软件和信息技术服务人员", "会计专业人员", "统计专业人员", "销售人员"]);
+  });
 });

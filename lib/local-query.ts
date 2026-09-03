@@ -189,12 +189,16 @@ export function parseCareerQuestionLocally(
     : [];
   const occupationKeywords = lexicalOccupationKeywords.length ? lexicalOccupationKeywords : confidentSemanticTarget;
   const occupationCandidates = rankedOccupationCandidates.map((candidate) => candidate.name);
+  const occupationOptions = occupationTarget && !occupationKeywords.length && !occupationCandidates.length
+    ? occupationPool.map((occupation) => occupation.subclassName)
+    : [];
 
   return {
     skills,
     confirmedSkills,
     occupationKeywords,
     occupationCandidates,
+    occupationOptions,
     cities,
     salaryMinYuan: salary,
     salaryMaxYuan: salary,

@@ -115,8 +115,12 @@ export async function POST(request: Request) {
             query = {
               ...query,
               occupationKeywords: Array.from(new Set([...query.occupationKeywords, ...queryPlan.occupationTargets])).slice(0, 3),
+              occupationCandidates: queryPlan.occupationTargets,
+              occupationOptions: undefined,
               intent: "career_recommendation"
             };
+          } else if (query.occupationOptions?.length) {
+            query = { ...query, occupationOptions: undefined };
           }
           const taskProgress = progressCopy(queryPlan);
           emit({ type: "status", payload: { stage: "searching", message: taskProgress.searching } });

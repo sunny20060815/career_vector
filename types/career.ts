@@ -23,6 +23,7 @@ export interface ParsedCareerQuery {
   confirmedSkills?: string[];
   occupationKeywords: string[];
   occupationCandidates?: string[];
+  occupationOptions?: string[];
   cities: string[];
   salaryMinYuan: number | null;
   salaryMaxYuan: number | null;

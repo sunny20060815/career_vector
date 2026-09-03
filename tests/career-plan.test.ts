@@ -91,4 +91,50 @@ describe("career evidence planning", () => {
     expect(plan.occupationTargets).toEqual(["数字技术工程技术人员"]);
     expect(plan.occupationTargetConfidence).toBe(0.94);
   });
+
+  it("keeps an explicit natural-language career target when semantic planning falls back", () => {
+    const question = "我是首经贸2024级经济统计学专业学生，想进入ai技术相关职业。请结合培养方案和岗位需求，给我一份分阶段学习建议。";
+    const query = parseCareerQuestionLocally(question, [
+      { canonicalName: "人工智能技术", aliases: ["AI", "人工智能"] }
+    ]);
+    const plan = parseCareerQueryPlan("", question, query);
+
+    expect(query.occupationKeywords).toEqual([]);
+    expect(query.occupationCandidates).toEqual(["数字技术工程技术人员"]);
+    expect(plan).toMatchObject({
+      answerStyle: "learning_plan",
+      occupationTargets: ["数字技术工程技术人员"],
+      occupationTargetConfidence: 0.7
+    });
+  });
+
+  it("does not discard the deterministic target when the planner returns low confidence", () => {
+    const question = "我想进入AI技术相关职业，请给我学习建议。";
+    const query = parseCareerQuestionLocally(question, [
+      { canonicalName: "人工智能技术", aliases: ["AI", "人工智能"] }
+    ]);
+    const plan = parseCareerQueryPlan(
+      '{"route":"standard","answerStyle":"learning_plan","modules":["occupations"],"focus":"AI职业路径","occupationTargets":[],"occupationTargetConfidence":0.4}',
+      question,
+      query
+    );
+
+    expect(plan.occupationTargets).toEqual(["数字技术工程技术人员"]);
+  });
+
+  it("accepts a semantic target selected from the full occupation options", () => {
+    const question = "我想进入芯片研发相关职业，请给我学习建议。";
+    const query = parseCareerQuestionLocally(question, catalog, [], [
+      { subclassName: "电子工程技术人员", aliases: ["集成电路工程技术人员"] },
+      { subclassName: "数字技术工程技术人员", aliases: ["人工智能工程技术人员"] }
+    ]);
+    const plan = parseCareerQueryPlan(
+      '{"route":"standard","answerStyle":"learning_plan","modules":["occupations","curriculum"],"focus":"芯片研发职业路径","occupationTargets":["电子工程技术人员"],"occupationTargetConfidence":0.93}',
+      question,
+      query
+    );
+
+    expect(plan.occupationTargets).toEqual(["电子工程技术人员"]);
+    expect(plan.occupationTargetConfidence).toBe(0.93);
+  });
 });
