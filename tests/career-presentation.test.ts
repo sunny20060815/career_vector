@@ -28,6 +28,20 @@ const evidence: CareerEvidence = {
 };
 
 describe("career presentation", () => {
+  it("answers teacher AI adaptability questions with evidence and course actions", () => {
+    const answer = formatFallbackCareerAnswer({
+      ...evidence,
+      inferredSkills: ["Python"],
+      queryPlan: { route: "adaptive", answerStyle: "curriculum_design", modules: ["curriculum", "ai_impact"], focus: "AI适应性" }
+    }, "请分析首经贸2025级经济学（实验班）培养方案对AI时代的适应性，哪些课程应强化、整合或增加实践环节？");
+    expect(answer).toContain("**AI适应性判断**");
+    expect(answer).toContain("AI暴露度72.4");
+    expect(answer).toContain("共现强度0.540");
+    expect(answer).toContain("**计量经济学：**");
+    expect(answer).toContain("独立答辩");
+    expect(answer).not.toContain("**课程结构与岗位接口**");
+    expect(answer).not.toContain("**历年方案变化**");
+  });
   it("shows traceable evidence before the final advice", () => {
     expect(buildEvidencePreview(evidence)).toMatchObject({
       sources: expect.arrayContaining(["skills", "occupation_skill_stats", "city_skill_forecasts", "major_programs", "major_skills", "occupation_catalog", "skill_ai_exposure", "ai_skill_cooccurrence（本地索引兜底）"]),

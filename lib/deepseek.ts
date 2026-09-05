@@ -69,6 +69,7 @@ queryPlan.answerStyle 只规定本轮必须覆盖的决策内容，不是固定�
 - 明确招聘样本主要来自上市公司及集团公司，建议还需结合学科定位、师资条件和学生发展目标审议。
 
 教师端还必须遵守以下口径：
+- 当原问题关注AI、人工智能或大模型对培养方案的适应性时，优先回答“AI影响证据与任务变化—现有课程如何回应—强化、整合、实践与考核”。此时就业去向和历年变化只是背景，可以省略；不得用一般供需诊断替代AI分析。报告可用的AI暴露度与技能共现强度并说明口径，教学任务推断须标为建议，不得将相关性写成已证实的替代或互补。至少将两门真实课程连接到AI带来的训练变化及可考核成果。
 - 回答AI适应性、强化或整合课程的问题时，逐项连接“已存在的真实课程—建议调整的内容—实践任务—考核成果”，至少提出两项具体课程动作。经济学等专业可建议比较因果解释与预测、传统方法与机器学习，但必须标明是建议设计，不是已开设内容。
 - 通用素养和办公工具的高需求占比不能直接作为新增课程优先级；将沟通、团队合作、责任意识融入项目与答辩评价。招聘技能占比不是课程重要性权重。不得将财务助理等去向名称直接作为专业培养项目主题。
 - dataScope为专业类的去向必须说明仅为所属专业类的共同信号；混合口径也要说明，不能笼统称为该专业的主要去向。培养目标与核心学科训练共同约束修订建议。
@@ -640,7 +641,7 @@ function mentionsCurriculumDetails(answer: string, record: Record<string, unknow
     && (inferredSkills.length === 0 || skillMentions >= 1);
 }
 
-export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: object): boolean {
+export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: object, question = ""): boolean {
   const record = evidence as Record<string, unknown>;
   const versions = Array.isArray(record.curriculumVersions) ? record.curriculumVersions : [];
   const required = [
@@ -650,11 +651,16 @@ export function isAdequateCurriculumDesignerAnswer(answer: string, evidence: obj
     /边界|样本|学科定位|师资|长期发展|不能单独|不等于/
   ];
   const hasDestinations = Array.isArray(record.majorDestinations) && record.majorDestinations.length > 0;
+  const aiFocus = /AI|人工智能|大模型|生成式/i.test(question);
+  const profiles = Array.isArray(record.profiles) ? record.profiles as Array<Record<string, unknown>> : [];
   return answer.trim().length >= 500
     && required.every((pattern) => pattern.test(answer))
     && mentionsCurriculumDetails(answer, record)
-    && (!hasDestinations || /毕业去向|就业去向|专业去向|从业方向/.test(answer))
-    && (versions.length < 2 || /历年|版本|变化|20(?:23|24|25)级/.test(answer));
+    && (!aiFocus || (/AI|人工智能/i.test(answer) && /核验|验证|偏差/.test(answer) && /考核|答辩|评价/.test(answer)))
+    && (!aiFocus || !profiles.some((profile) => typeof profile.aiExposure === "number" && profile.aiExposure > 0) || /暴露度/.test(answer))
+    && (!aiFocus || !profiles.some((profile) => typeof profile.aiCooccurrence === "number") || /共现强度/.test(answer))
+    && (aiFocus || !hasDestinations || /毕业去向|就业去向|专业去向|从业方向/.test(answer))
+    && (aiFocus || versions.length < 2 || /历年|版本|变化|20(?:23|24|25)级/.test(answer));
 }
 
 export function isAdequateIndividualCareerAnswer(answer: string, evidence: object): boolean {
@@ -700,7 +706,7 @@ export async function planCareerQuestion(question: string, query: ParsedCareerQu
 export async function writeCareerAnswer(question: string, evidence: object, audience: UserAudience = "individual"): Promise<CareerAdvisorOutput> {
   const content = await complete(env.deepseekAnswerModel(), buildCareerAdvisorMessages(question, evidence, audience), { timeoutMs: Math.min(env.deepseekAnswerTimeoutMs(), 45_000) });
   const output = parseCareerAdvisorOutput(content);
-  if (audience === "curriculum_designer" && !isAdequateCurriculumDesignerAnswer(output.answer, evidence)) {
+  if (audience === "curriculum_designer" && !isAdequateCurriculumDesignerAnswer(output.answer, evidence, question)) {
     throw new Error("DeepSeek 教师端回答未满足证据与内容要求");
   }
   if (audience === "individual" && !isAdequateIndividualCareerAnswer(output.answer, evidence)) {

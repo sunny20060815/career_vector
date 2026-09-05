@@ -43,7 +43,9 @@ export function fallbackCareerPlan(question: string, query: ParsedCareerQuery, a
       route: "adaptive",
       answerStyle: "curriculum_design",
       modules: uniqueModules(["curriculum", "major_destinations", "skill_profiles", "occupations", "ai_impact", "skill_pairs", "occupation_catalog"]),
-      focus: "诊断培养目标和课程技能供给，比较历年方案与真实岗位需求，并提出可执行的培养方案修订建议"
+      focus: /AI|人工智能|大模型|生成式/i.test(question)
+        ? "分析AI如何改变专业任务与能力要求，结合AI暴露和技能共现证据判断现有课程的适应性，提出课程强化、整合、实践及考核建议；就业去向仅作背景"
+        : "诊断培养目标和课程技能供给，比较历年方案与真实岗位需求，并提出可执行的培养方案修订建议"
     };
   }
   const hasProgram = Boolean(query.programKey);

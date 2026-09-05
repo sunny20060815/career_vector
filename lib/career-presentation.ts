@@ -362,7 +362,7 @@ function formatSkillGrowthFallback(evidence: CareerEvidence): string {
   ].filter(Boolean).join("\n\n");
 }
 
-function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
+function formatCurriculumDesignFallback(evidence: CareerEvidence, question = ""): string {
   const curriculum = evidence.curriculum as Record<string, unknown> | null | undefined;
   if (!curriculum) return formatNoDataCareerAnswer("", "curriculum_designer");
   const major = String(curriculum.major || "该专业");
@@ -375,6 +375,40 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
   const theoryCourses = courses.filter((course) => /经济学|财政学|金融学|会计学|管理学|法学|教育学|新闻学|社会学/.test(course) && !/数学|计量|统计|数据|人工智能|机器学习/.test(course)).slice(0, 6);
   const methodCourses = courses.filter((course) => /数学|计量|统计|预测|实验|研究方法/.test(course)).slice(0, 6);
   const digitalCourses = courses.filter((course) => /Python|数据|人工智能|机器学习|编程|计算机/.test(course)).slice(0, 6);
+  if (/AI|人工智能|大模型|生成式/i.test(question)) {
+    const courseActions = courses.filter((course) => /计量|统计|预测|研究方法|Python|数据|人工智能|机器学习|编程|计算机/.test(course)).slice(0, 8).map((course) => {
+      const action = /机器学习|预测/.test(course)
+        ? "强化传统方法与AI模型的比较：设置留出样本，检查数据泄漏、泛化误差和结果解释；提交模型比较报告，分别考核预测效果与专业解释。"
+        : /Python|编程|计算机|数据/.test(course)
+        ? "增加AI生成代码或分析步骤的核验：使用同一数据完成人工基线与AI辅助版本，检查错误处理、数据口径与可复现性；提交代码、测试结果及错误修正记录。"
+        : /人工智能/.test(course)
+        ? "与专业课整合案例，增加事实核查、来源追溯、隐私和模型偏差训练；提交AI使用记录及人工核验报告，考核学生能否发现并解释错误。"
+        : "强化问题设定、方法假设与结果判断：让AI辅助计算或初步分析，由学生检验假设、稳健性并解释专业含义；通过分析报告与独立答辩考核，不能只评价最终答案。";
+      return `- **${course}：** ${action}`;
+    });
+    const aiFacts = evidence.profiles.filter((profile) => (evidence.inferredSkills ?? evidence.recognizedSkills).includes(String(profile.skill || profile.displayName || ""))).slice(0, 12);
+    const metricLines = aiFacts.map((profile) => {
+      const exposure = numberValue(profile, "aiExposure");
+      const cooccurrence = numberValue(profile, "aiCooccurrence");
+      const facts = [exposure !== null && exposure > 0 ? `关联职业AI暴露度${exposure.toFixed(1)}` : "", cooccurrence !== null ? `与AI技能的共现强度${cooccurrence.toFixed(3)}` : ""].filter(Boolean);
+      return facts.length ? `- ${profileName(profile)}：${facts.join("；")}。` : "";
+    }).filter(Boolean).slice(0, 4);
+    return [
+      "**AI适应性判断**",
+      `${cohort}${major}${digitalCourses.length ? `已设置${digitalCourses.slice(0, 4).join("、")}，具备相关课程基础` : "的现有资料尚不足以确认专门的AI训练安排"}。但课程名称不能证明学生已能独立核验AI结果；应重点评估专业判断、方法验证与人机协作是否落实到作业和考核。`,
+      "**AI影响证据与任务变化**",
+      ...metricLines,
+      metricLines.length ? "以上是技能关联职业的潜在AI影响与招聘共现信号，并非该专业的整体暴露度，也不能推断课程被替代。共现强度反映联系，不直接证明互补或替代。" : "当前未取得可用的AI暴露度及技能共现数值，无法据此给课程排列受影响程度。",
+      "从教学任务角度，以下是教学设计建议：AI可参与资料整理、代码草拟和初步分析，因此应增加来源核验、方法选择、错误识别及专业解释的独立训练；是否已有这些环节，还需结合课程大纲和作业确认。",
+      "**课程应如何强化与整合**",
+      ...courseActions,
+      courseActions.length ? "以上均为建议调整，并非断言原课程没有相关教学。" : "未取得足够具体的课程名称，暂只能提出实践原则，不能虚构课程安排。",
+      "**跨课程实践与考核**",
+      `${theoryCourses.length ? `以${theoryCourses.slice(0, 2).join("、")}的专业问题为起点` : "以专业主干课程的问题为起点"}，${/经济/.test(major) ? "设计经济指标预测或政策分析项目，区分预测准确性与因果解释" : "设计领域案例，对比人工分析与AI辅助结果"}，将方法课和工具课接入同一项目。提交数据或材料来源、AI使用记录、核验过程和专业报告，并安排独立答辩；评分同时考察专业推理和AI协作，避免仅凭工具输出给分。`,
+      "**判断边界**",
+      "专业就业去向仅用于选择应用背景；招聘样本与AI指标提供变化信号，不能单独决定课程学分或删课。当前结论是已有训练基础与建议核查的环节，尚不是对教学效果的实测评价。"
+    ].filter(Boolean).join("\n\n");
+  }
   const supplied = new Set(evidence.inferredSkills ?? evidence.recognizedSkills);
   const destinationNames = Array.from(new Set((evidence.majorDestinations ?? [])
     .filter((item) => item.destinationTier !== "通用去向")
@@ -431,7 +465,7 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
 }
 
 export function formatFallbackCareerAnswer(evidence: CareerEvidence, question = ""): string {
-  if (evidence.queryPlan?.answerStyle === "curriculum_design") return formatCurriculumDesignFallback(evidence);
+  if (evidence.queryPlan?.answerStyle === "curriculum_design") return formatCurriculumDesignFallback(evidence, question);
   if (evidence.queryPlan?.answerStyle === "ai_tasks") return formatAiTaskFallback(evidence);
   if (evidence.queryPlan?.answerStyle === "comparison") return formatComparisonFallback(evidence, question);
   if (evidence.queryPlan?.answerStyle === "skill_growth") return formatSkillGrowthFallback(evidence);
