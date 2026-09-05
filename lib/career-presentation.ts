@@ -376,15 +376,14 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
   const methodCourses = courses.filter((course) => /数学|计量|统计|预测|实验|研究方法/.test(course)).slice(0, 6);
   const digitalCourses = courses.filter((course) => /Python|数据|人工智能|机器学习|编程|计算机/.test(course)).slice(0, 6);
   const supplied = new Set(evidence.inferredSkills ?? evidence.recognizedSkills);
-  const target = evidence.occupations.slice(0, 3).map((item) => item.name);
   const destinationNames = Array.from(new Set((evidence.majorDestinations ?? [])
     .filter((item) => item.destinationTier !== "通用去向")
     .map((item) => item.destinationName))).slice(0, 6);
-  const targetRows = evidence.targetOccupationSkills ?? [];
+  const targetRows = (evidence.targetOccupationSkills ?? []).filter((item) => !/沟通|责任心|团队合作|抗压|职业道德|Office|办公软件|^Excel$|学习能力/.test(item.skill));
   const targetSkills = Array.from(new Set(targetRows.map((item) => item.skill))).slice(0, 12);
   const covered = targetSkills.filter((skill) => supplied.has(skill));
   const gaps = targetSkills.filter((skill) => !supplied.has(skill)).slice(0, 6);
-  const occupationSkillLines = target.map((occupation) => {
+  const occupationSkillLines = evidence.occupations.slice(0, 3).map(({ name: occupation }) => {
     const skills = targetRows.filter((item) => item.occupationName === occupation).slice(0, 5).map((item) => item.forecastDemandShare !== null
       ? `${item.skill}（${evidence.forecastYear}年${(item.forecastDemandShare * 100).toFixed(1)}%）`
       : item.skill);
@@ -409,21 +408,21 @@ function formatCurriculumDesignFallback(evidence: CareerEvidence): string {
     "**核心判断**",
     standardMajorLine,
     `${cohort}${major}应继续以专业定位和主要就业去向为培养主轴，课程供给、招聘技能和${evidence.forecastYear}年预测只用于检验与校准这条主轴。${digitalCourses.length ? `方案已包含${digitalCourses.slice(0, 4).join("、")}，这些工具应用于增强${major.replace(/（.*?）/g, "")}专业工作，不应反过来将人才培养定位导向纯技术职业。` : ""}`,
-    destinationNames.length ? `依据阳光高考网公布的专业就业去向资料，相关方向主要包括${destinationNames.join("、")}。后续的课程与技能调整均应优先回应这些专业路径。` : "当前未取得可用的专业就业去向，以下职业对应仅作为待复核的市场信号。",
+    destinationNames.length ? `依据阳光高考网公布的专业就业去向资料，${(evidence.majorDestinations ?? []).some((item) => item.dataScope !== "专业") ? "以下包含所属专业类的共同去向信号，不能作为本专业独有的主要去向：" : "相关方向包括"}${destinationNames.join("、")}。这些资料用于补充培养定位判断，不应直接把岗位名称转化为课程建设目标。` : "当前未取得可用的专业就业去向，以下职业对应仅作为待复核的市场信号。",
     "**课程结构与岗位接口**",
     theoryCourses.length ? `- 专业理论：${theoryCourses.join("、")}，支撑问题定义、机制解释与专业判断。` : "",
     methodCourses.length ? `- 定量方法：${methodCourses.join("、")}，需要向数据处理、方法选择和结果解释连续衔接。` : "",
     digitalCourses.length ? `- 数字工具：${digitalCourses.join("、")}，应与专业课共建案例，避免变成孤立的软件操作训练。` : "",
-    occupationSkillLines.length ? `结合专业去向后，相关职业的高频技能信号为：\n${occupationSkillLines.join("\n")}` : target.length ? `已识别${target.join("、")}等专业相关职业，但尚缺可用的职业内部技能排序。` : "现有证据尚不足以确定主要对接职业。",
+    occupationSkillLines.length ? `相关职业的专业技能信号如下；百分比是该职业岗位中的预测技能需求占比，不是课程重要性权重：\n${occupationSkillLines.join("\n")}` : "现有职业技能记录不足以支持具体的专业技能排序。",
     covered.length ? `培养方案文本已能稳定识别${covered.join("、")}等能力覆盖。` : "当前文本映射尚未显示课程供给与目标职业高频技能的稳定交集，应复核课程大纲和实际作业。",
-    gaps.length ? `建议优先核查${gaps.join("、")}的课程承载情况。“未覆盖”仅指方案文本未稳定识别，不等于实际没有教学。` : "未识别出明确的高频技能缺口，应转向检查教学深度与学习成果。",
+    gaps.length ? `${gaps.join("、")}属于待核查的职业技能信号，只有与培养目标相关时才适合进入课程；文本未识别不等于实际没有教学。沟通、团队合作和责任意识宜融入项目答辩与过程评价，不据此单独增课。` : "未识别出明确的专业技能缺口，应检查教学深度与学习成果。",
     rising.length ? `${rising.join("、")}在${evidence.forecastYear}年预测中呈上升趋势，可作为课程实践内容调整的市场信号。` : "现有预测证据未形成需要单独强调的上升技能清单。",
     "**历年方案变化**",
     versionLine,
     "**修订建议**",
     `1. **保留主干。** 保留${theoryCourses.slice(0, 4).join("、") || "核心理论课"}等学科基础，不依据短期岗位热度机械压缩。`,
-    `2. **重组方法链。** 将${methodCourses.slice(0, 3).join("、") || "定量方法课"}${digitalCourses.length ? `与${digitalCourses.slice(0, 3).join("、")}` : ""}按“原理—数据—模型—解释”衔接；${gaps.length ? `围绕${gaps.slice(0, 3).join("、")}先核查现有课程，能由既有课程承接的优先更新模块和案例。` : "重点增强课程联动和项目深度。"}`,
-    `3. **建设专业场景项目。** 围绕${destinationNames.slice(0, 3).join("、") || "主要专业去向"}设置跨课程任务，要求学生完成“专业问题定义—数据处理—方法选择—结果核验—业务或政策解释”的完整成果。`,
+    `2. **强化方法训练。** 在${methodCourses.filter((course) => /计量|统计|预测|研究方法/.test(course)).slice(0, 3).join("、") || methodCourses.slice(0, 3).join("、") || "现有专业方法课程"}中增加真实数据或材料分析、方法适用条件和稳健性检验。提交分析报告及可复现过程，考核方法选择与结论解释；这属于建议增加的实践内容，尚不能认定原课程缺失。`,
+    `3. **整合工具与专业应用。** ${digitalCourses.length ? `将${digitalCourses.slice(0, 4).join("、")}与${theoryCourses.slice(0, 2).join("、") || "专业主干课程"}通过同一项目衔接` : "将数字工具实践嵌入现有专业主干课程"}；${/经济/.test(major) ? "可设计政策效果评估或经济指标预测项目，区分因果解释与预测准确性，并比较传统统计模型和机器学习方法" : "由专业问题确定方法和工具，比较不同方法的适用条件与分析结果"}。提交数据说明、分析过程和专业报告，分别评价专业判断与工具应用，避免重复安排基础软件操作。`,
     "4. **嵌入AI协作。** 可用AI辅助检索、代码解释和初步分析，但将数据质量、模型设定、结果可复现性、专业解释和伦理边界列为必须由学生完成的考核项。",
     "5. **改造成果评价。** 以可复现代码、数据说明、分析报告和口头答辩组成成果档案，分别评价专业判断、方法应用、工具使用和沟通表达，避免用“设置了课程”代替“学生达成了能力”。",
     "**证据边界**",
