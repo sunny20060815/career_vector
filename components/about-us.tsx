@@ -141,8 +141,8 @@ export function AboutUs() {
 
       <section className="mt-12" aria-labelledby="advisor-heading">
         <SectionHeading icon={GraduationCap} id="advisor-heading" index="01" title="指导老师" subtitle="研究设计与项目指导" />
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          {advisors.map((person) => <AdvisorCard key={person.name} person={person} />)}
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          {advisors.map((person, index) => <AdvisorCard key={person.name} person={person} index={index} />)}
         </div>
       </section>
 
@@ -181,19 +181,29 @@ function SectionHeading({ icon: Icon, id, index, title, subtitle }: { icon: type
   return <div className="about-reveal flex items-end justify-between gap-4 border-b border-[#1c4a70] pb-3"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center border border-[#2c6896] bg-[#0c3157] text-[#65ace3]"><Icon size={17} /></span><div><h2 id={id} className="text-lg font-semibold text-[#e8eef3]">{title}</h2><p className="mt-0.5 text-xs text-[#617f98]">{subtitle}</p></div></div><span className="font-mono text-xs text-[#416987]">{index}</span></div>;
 }
 
-function AdvisorCard({ person }: { person: Person }) {
+function AdvisorCard({ person, index }: { person: Person; index: number }) {
   return (
-    <article className="about-reveal grid overflow-hidden border border-[#245578] bg-[#0a2747] sm:grid-cols-[168px_1fr]">
-      <div className="relative aspect-[4/3] overflow-hidden bg-[#0e345c] sm:m-5 sm:mr-0 sm:aspect-[3/4]">
-        <span className="absolute inset-x-0 top-0 aspect-[3/4] sm:inset-0 sm:aspect-auto">
-          <Image src={person.image} alt={`${person.name}照片`} fill sizes="(max-width: 640px) 100vw, 168px" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 24%" }} />
+    <article className="about-reveal flex min-w-0 flex-col overflow-hidden border border-[#285f88] bg-[#082542] shadow-[0_18px_50px_rgba(2,12,28,0.18)]">
+      <div className="relative aspect-[4/3] overflow-hidden border-b border-[#285f88] bg-[#0e345c]">
+        <span className="absolute inset-x-0 top-0 aspect-[3/4]">
+          <Image src={person.image} alt={`${person.name}照片`} fill priority={index === 0} sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 24%" }} />
         </span>
-        <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#03172d]/80 to-transparent sm:hidden" />
+        <span className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#03172d]/90 to-transparent" />
+        <span className="absolute left-4 top-4 border border-[#5ca1d4]/50 bg-[#03172d]/85 px-2 py-1 font-mono text-[10px] text-[#8bc2e8]">ADVISOR {String(index + 1).padStart(2, "0")}</span>
+        <div className="absolute inset-x-5 bottom-4 flex items-end justify-between gap-3">
+          <div>
+            <h3 className="font-serif text-2xl text-white">{person.name}</h3>
+            <p className="mt-1 text-xs text-[#a4bbcc]">{person.role}</p>
+          </div>
+          <span className="font-mono text-[10px] text-[#6fa7cf]">{String(index + 1).padStart(2, "0")} / {advisors.length}</span>
+        </div>
       </div>
-      <div className="p-5 md:p-6">
+      <div className="flex flex-1 flex-col p-5 md:p-6">
         <p className="text-[10px] font-semibold tracking-[0.14em] text-[#5ca6df]">ACADEMIC ADVISOR</p>
-        <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1"><h3 className="font-serif text-2xl text-white">{person.name}</h3><span className="text-xs text-[#7f9ab1]">{person.role}</span></div>
-        <p className="mt-4 text-sm leading-7 text-[#9aafbf]">{person.description}</p>
+        <p className="mt-4 flex-1 text-sm leading-7 text-[#9aafbf]">{person.description}</p>
+        <div className="mt-6 border-t border-[#1c4d73] pt-4">
+          <span className="border-l-2 border-[#55a4dc] pl-3 text-[10px] tracking-[0.12em] text-[#5f819b]">RESEARCH · METHODS · APPLICATION</span>
+        </div>
       </div>
     </article>
   );
