@@ -25,6 +25,13 @@ const advisors: Person[] = [
     role: "项目指导教师",
     image: "/team/毛老师.jpg",
     description: "理学博士，工商管理学院讲师，中国消费大数据研究院研究员、北京绿茵茵互联网科技有限公司联合创始人，研究方向为商业数据分析与文本挖掘。讲授商务数据分析、文本数据挖掘、机器学习实战等课程，出版多部Python数据分析著作。在本项目中主要指导招聘大数据处理，并为项目商业化落地提供建议。"
+  },
+  {
+    name: "张老师",
+    role: "项目指导教师",
+    image: "/team/张老师.jpg",
+    description: "经济学博士，经济学院数量经济系讲师，研究方向包括多边市场与数字平台、微观计量经济学、指数理论、金融摩擦与央行货币政策等。具有数理模型构建、贝叶斯计算和高性能计算等方面的实践经验。在本项目中主要负责模型优化、数据分析方法完善以及平台工业化落地指导，为项目算法设计、技术迭代和商业应用转化提供支持。",
+    imagePosition: "50% 20%"
   }
 ];
 
@@ -49,13 +56,6 @@ const members: Person[] = [
     image: "/team/孙同学.jpeg",
     description: "自动化专业大三本科生。曾获全国大学生数学建模竞赛省级二等奖，参与深度学习医疗分割项目，具备模型训练与数据分析基础。在本项目中承担辅助网站搭建与功能测试联调工作。",
     imagePosition: "50% 34%"
-  },
-  {
-    name: "吴同学",
-    role: "宣传运营",
-    image: "/team/吴同学.jpg",
-    description: "传播学专业大三本科生。具备文案采编与内容创作能力，擅长公众号排版、海报板绘设计，持有全媒体运营师证书，具有丰富的科研竞赛和学生工作经验。在本项目中担任宣传小组核心成员，承担宣传运营相关工作。",
-    imagePosition: "50% 24%"
   },
   {
     name: "胡同学",
@@ -136,7 +136,7 @@ export function AboutUs() {
       <header className="about-reveal max-w-3xl">
         <div className="flex items-center gap-2 text-xs font-semibold tracking-[0.16em] text-[#5ba6e3]"><Users size={15} />ABOUT US</div>
         <h1 className="mt-4 font-serif text-3xl text-white md:text-4xl">让职业选择拥有更可靠的数据坐标</h1>
-        <p className="mt-4 text-sm leading-7 text-[#86a0b6]">职向量由经济学、人工智能、自动化、传播学等不同专业背景的师生共同建设。团队将招聘大数据、人工智能与人才培养方案结合，为学生提供可解释的职业匹配和技能投资建议。</p>
+        <p className="mt-4 text-sm leading-7 text-[#86a0b6]">职向量由经济学、人工智能、自动化等不同专业背景的师生共同建设。团队将招聘大数据、人工智能与人才培养方案结合，为学生提供可解释的职业匹配和技能投资建议。</p>
       </header>
 
       <section className="mt-12" aria-labelledby="advisor-heading">
