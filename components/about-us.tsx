@@ -134,15 +134,15 @@ export function AboutUs() {
   return (
     <div ref={rootRef} className="mx-auto max-w-7xl py-10 md:py-14">
       <header className="about-reveal max-w-3xl">
-        <div className="flex items-center gap-2 text-xs font-semibold tracking-[0.16em] text-[#5ba6e3]"><Users size={15} />ABOUT US</div>
-        <h1 className="mt-4 font-serif text-3xl text-white md:text-4xl">让职业选择拥有更可靠的数据坐标</h1>
+        <div className="flex items-center gap-3 text-[10px] font-semibold tracking-[0.2em] text-[#73c6ff]"><span className="h-px w-10 bg-[#73c6ff]" /><Users size={14} />ABOUT US</div>
+        <h1 className="mt-5 font-serif text-4xl leading-tight text-white md:text-5xl">让职业选择拥有更可靠的数据坐标</h1>
         <p className="mt-4 text-sm leading-7 text-[#86a0b6]">职向量由经济学、人工智能、自动化等不同专业背景的师生共同建设。团队将招聘大数据、人工智能与人才培养方案结合，为学生提供可解释的职业匹配和技能投资建议。</p>
       </header>
 
       <section className="mt-12" aria-labelledby="advisor-heading">
         <SectionHeading icon={GraduationCap} id="advisor-heading" index="01" title="指导老师" subtitle="研究设计与项目指导" />
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          {advisors.map((person, index) => <AdvisorCard key={person.name} person={person} index={index} />)}
+        <div className="mt-6 border-y border-[#1c4a70]">
+          {advisors.map((person, index) => <AdvisorProfile key={person.name} person={person} index={index} />)}
         </div>
       </section>
 
@@ -151,14 +151,14 @@ export function AboutUs() {
         <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,0.88fr)_minmax(440px,1.12fr)]">
           <div className="about-reveal min-w-0">
             <p className="mb-3 text-xs leading-6 text-[#66859d]">选择成员，查看其专业背景与项目分工</p>
-            <div className="flex snap-x gap-2 overflow-x-auto pb-3 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
+            <div className="flex snap-x gap-2 overflow-x-auto border-y border-[#1c4a70] pb-0 lg:grid lg:grid-cols-2 lg:gap-0 lg:overflow-visible">
               {members.map((person, index) => (
                 <button
                   key={`${person.image}-${index}`}
                   type="button"
                   onClick={() => setSelectedMember(index)}
                   aria-pressed={selectedMember === index}
-                  className={`group flex w-56 shrink-0 snap-start items-center gap-3 border p-2.5 text-left transition lg:w-auto ${selectedMember === index ? "border-[#4b91c6] bg-[#0d355c]" : "border-[#1d4c71] bg-[#061f39] hover:border-[#326b95] hover:bg-[#082844]"}`}
+                  className={`group flex w-56 shrink-0 snap-start items-center gap-3 border-b border-[#173f5e] p-3 text-left transition lg:w-auto lg:odd:border-r ${selectedMember === index ? "bg-[#092b49]/80 text-white" : "hover:bg-[#06223b]/60"}`}
                 >
                   <span className="relative h-16 w-12 shrink-0 overflow-hidden bg-[#0d3155]">
                     <Image src={person.image} alt="" fill sizes="48px" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 28%" }} />
@@ -178,32 +178,25 @@ export function AboutUs() {
 }
 
 function SectionHeading({ icon: Icon, id, index, title, subtitle }: { icon: typeof Users; id: string; index: string; title: string; subtitle: string }) {
-  return <div className="about-reveal flex items-end justify-between gap-4 border-b border-[#1c4a70] pb-3"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center border border-[#2c6896] bg-[#0c3157] text-[#65ace3]"><Icon size={17} /></span><div><h2 id={id} className="text-lg font-semibold text-[#e8eef3]">{title}</h2><p className="mt-0.5 text-xs text-[#617f98]">{subtitle}</p></div></div><span className="font-mono text-xs text-[#416987]">{index}</span></div>;
+  return <div className="about-reveal flex items-end justify-between gap-4 border-b border-[#1c4a70] pb-3"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center text-[#73c6ff]"><Icon size={18} /></span><div><h2 id={id} className="text-xl font-semibold text-[#e8eef3]">{title}</h2><p className="mt-0.5 text-xs text-[#67869d]">{subtitle}</p></div></div><span className="font-mono text-xs text-[#4f728d]">{index}</span></div>;
 }
 
-function AdvisorCard({ person, index }: { person: Person; index: number }) {
+function AdvisorProfile({ person, index }: { person: Person; index: number }) {
+  const imageOnRight = index % 2 === 1;
   return (
-    <article className="about-reveal flex min-w-0 flex-col overflow-hidden border border-[#285f88] bg-[#082542] shadow-[0_18px_50px_rgba(2,12,28,0.18)]">
-      <div className="relative aspect-[4/3] overflow-hidden border-b border-[#285f88] bg-[#0e345c]">
-        <span className="absolute inset-x-0 top-0 aspect-[3/4]">
-          <Image src={person.image} alt={`${person.name}照片`} fill priority={index === 0} sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 24%" }} />
-        </span>
-        <span className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#03172d]/90 to-transparent" />
-        <span className="absolute left-4 top-4 border border-[#5ca1d4]/50 bg-[#03172d]/85 px-2 py-1 font-mono text-[10px] text-[#8bc2e8]">ADVISOR {String(index + 1).padStart(2, "0")}</span>
-        <div className="absolute inset-x-5 bottom-4 flex items-end justify-between gap-3">
-          <div>
-            <h3 className="font-serif text-2xl text-white">{person.name}</h3>
-            <p className="mt-1 text-xs text-[#a4bbcc]">{person.role}</p>
-          </div>
-          <span className="font-mono text-[10px] text-[#6fa7cf]">{String(index + 1).padStart(2, "0")} / {advisors.length}</span>
+    <article className={`about-reveal relative grid min-w-0 gap-7 overflow-hidden py-8 md:grid-cols-[minmax(200px,0.48fr)_minmax(0,1.52fr)] md:items-center md:gap-12 lg:grid-cols-[minmax(230px,0.46fr)_minmax(0,1.54fr)] lg:gap-16 lg:py-11 ${index ? "border-t border-[#1c4a70]" : ""}`}>
+      <span aria-hidden="true" className={`pointer-events-none absolute top-2 font-serif text-[88px] leading-none text-white/[0.025] md:top-6 md:text-[128px] ${imageOnRight ? "left-0" : "right-0"}`}>{String(index + 1).padStart(2, "0")}</span>
+      <div className={`relative mx-auto w-full max-w-[260px] ${imageOnRight ? "md:order-2" : ""}`}>
+        <div className="relative aspect-[3/4] overflow-hidden bg-[#0d3155]">
+          <Image src={person.image} alt={`${person.name}照片`} fill priority={index === 0} sizes="(max-width: 768px) 260px, 260px" className="object-cover" style={{ objectPosition: person.imagePosition ?? "50% 24%" }} />
+          <span className="absolute inset-0 bg-gradient-to-t from-[#03172d]/30 via-transparent to-transparent" />
         </div>
+        <span aria-hidden="true" className="absolute -bottom-2 -right-2 h-16 w-16 border-b border-r border-[#4d98cf]" />
       </div>
-      <div className="flex flex-1 flex-col p-5 md:p-6">
-        <p className="text-[10px] font-semibold tracking-[0.14em] text-[#5ca6df]">ACADEMIC ADVISOR</p>
-        <p className="mt-4 flex-1 text-sm leading-7 text-[#9aafbf]">{person.description}</p>
-        <div className="mt-6 border-t border-[#1c4d73] pt-4">
-          <span className="border-l-2 border-[#55a4dc] pl-3 text-[10px] tracking-[0.12em] text-[#5f819b]">RESEARCH · METHODS · APPLICATION</span>
-        </div>
+      <div className={`relative ${imageOnRight ? "md:order-1" : ""}`}>
+        <div className="flex items-center gap-3 text-[10px] font-semibold tracking-[0.16em] text-[#73c6ff]"><span className="h-px w-8 bg-[#73c6ff]" />PROJECT ADVISOR · {String(index + 1).padStart(2, "0")}</div>
+        <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1"><h3 className="font-serif text-3xl text-white md:text-4xl">{person.name}</h3><span className="text-xs text-[#7f9ab1]">{person.role}</span></div>
+        <p className="mt-5 max-w-3xl text-sm leading-8 text-[#9aafbf]">{person.description}</p>
       </div>
     </article>
   );
@@ -211,7 +204,7 @@ function AdvisorCard({ person, index }: { person: Person; index: number }) {
 
 function MemberProfile({ ref, person, index, onPrevious, onNext }: { ref: React.Ref<HTMLElement>; person: Person; index: number; onPrevious: () => void; onNext: () => void }) {
   return (
-    <article ref={ref} className="about-reveal sticky top-5 min-w-0 overflow-hidden border border-[#326d98] bg-[#0a2949] shadow-[0_20px_60px_rgba(2,12,28,0.22)]">
+    <article ref={ref} className="about-reveal sticky top-5 min-w-0 overflow-hidden border-y border-[#326d98]">
       <div className="grid md:grid-cols-[minmax(210px,0.9fr)_minmax(0,1.1fr)]">
         <div className="profile-reveal relative aspect-[4/3] overflow-hidden bg-[#0d3155] md:aspect-[3/4]">
           <span className="absolute inset-x-0 top-0 aspect-[3/4] md:inset-0 md:aspect-auto">
@@ -220,7 +213,7 @@ function MemberProfile({ ref, person, index, onPrevious, onNext }: { ref: React.
           <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#03172d]/85 to-transparent md:hidden" />
           <span className="absolute left-4 top-4 border border-[#5ca1d4]/50 bg-[#03172d]/85 px-2 py-1 font-mono text-[10px] text-[#8bc2e8]">TEAM {String(index + 1).padStart(2, "0")}</span>
         </div>
-        <div className="flex min-h-0 flex-col p-5 md:p-7">
+        <div className="flex min-h-0 flex-col p-5 md:px-8 md:py-7">
           <div className="profile-reveal flex items-start justify-between gap-4">
             <div><p className="text-[10px] font-semibold tracking-[0.14em] text-[#5ca6df]">CURRENT PROFILE</p><h3 className="mt-3 font-serif text-3xl text-white">{person.name}</h3><p className="mt-1 text-xs text-[#7fa0b9]">{person.role}</p></div>
             <span className="font-mono text-xs text-[#426b8a]">{String(index + 1).padStart(2, "0")} / {members.length}</span>

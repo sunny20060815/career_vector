@@ -316,21 +316,21 @@ export function SkillNetwork() {
   };
 
   return (
-    <div ref={rootRef} className="mt-7 border border-[#23557c] bg-[#041b31]">
-      <div className="flex flex-col gap-3 border-b border-[#214e72] p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div ref={rootRef} className="signal-frame mt-7 border-y border-[#23557c]">
+      <div className="flex flex-col gap-3 border-b border-[#214e72] py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-[#e4f1fa]">交互式技能共现网络</p>
           <p className="mt-1 text-xs text-[#6f91aa]">搜索、筛选或点击节点，查看技能的市场指标及组合关系</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <form className="flex h-9 min-w-0 border border-[#2a5b80] bg-[#061f38] focus-within:border-[#55a7de]" onSubmit={(event) => { event.preventDefault(); handleSearch(); }}>
+          <form className="flex h-9 min-w-0 border-b border-[#2a5b80] focus-within:border-[#73c6ff]" onSubmit={(event) => { event.preventDefault(); handleSearch(); }}>
             <label className="sr-only" htmlFor="skill-network-search">搜索技能</label>
             <input id="skill-network-search" list="skill-network-options" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索技能" className="min-w-0 flex-1 bg-transparent px-3 text-xs text-[#dcebf5] outline-none placeholder:text-[#50718b] sm:w-36" />
             <datalist id="skill-network-options">{data?.nodes.map((node) => <option key={node.id} value={node.id} />)}</datalist>
-            <button type="submit" className="grid w-9 place-items-center border-l border-[#2a5b80] text-[#72b8e8] transition-colors hover:bg-[#103655]" aria-label="搜索"><Search size={15} /></button>
+            <button type="submit" className="grid w-9 place-items-center text-[#72b8e8] transition-colors hover:text-white" aria-label="搜索"><Search size={15} /></button>
           </form>
           <label className="sr-only" htmlFor="skill-cluster-filter">筛选技能簇</label>
-          <select id="skill-cluster-filter" value={clusterId} onChange={(event) => setClusterId(event.target.value)} className="h-9 min-w-0 border border-[#2a5b80] bg-[#061f38] px-3 text-xs text-[#a9c1d2] outline-none focus:border-[#55a7de] sm:max-w-52">
+          <select id="skill-cluster-filter" value={clusterId} onChange={(event) => setClusterId(event.target.value)} className="h-9 min-w-0 border-b border-[#2a5b80] bg-transparent px-3 text-xs text-[#a9c1d2] outline-none focus:border-[#73c6ff] sm:max-w-52">
             <option value="all">全部技能簇</option>
             {data?.clusters.map((cluster) => <option key={cluster.id} value={cluster.id}>{cluster.id === 0 ? "待复核稀有技能" : `${String(cluster.id).padStart(2, "0")} · ${cluster.name}`}（{cluster.count}）</option>)}
           </select>
@@ -400,7 +400,7 @@ export function SkillNetwork() {
           <div className="pointer-events-none absolute bottom-3 right-3 bg-[#041a2fe6] px-2.5 py-1.5 font-mono text-[10px] text-[#63859e]">拖拽移动 · 滚轮缩放 · 点击查看</div>
         </div>
 
-        <aside className="border-t border-[#214e72] bg-[#062039] p-5 lg:border-l lg:border-t-0" aria-live="polite">
+        <aside className="border-t border-[#214e72] bg-[#04182d]/55 p-5 lg:border-l lg:border-t-0" aria-live="polite">
           {selectedNode ? (
             <>
               <div className="flex items-start gap-3">
@@ -418,7 +418,7 @@ export function SkillNetwork() {
               <div className="mt-5">
                 <p className="text-[10px] font-semibold tracking-[0.16em] text-[#5e829c]">最紧密关联技能</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {related.length ? related.map((item) => <button key={item.node.id} type="button" onClick={() => { setClusterId("all"); setSelectedId(item.node.id); }} className="border border-[#2a5f86] bg-[#082946] px-2.5 py-1.5 text-left text-xs text-[#a9c8dc] transition-colors hover:border-[#5ba8dc] hover:text-white"><span>{item.node.label}</span><span className="ml-1.5 font-mono text-[9px] text-[#527995]">{item.weight.toFixed(3)}</span></button>) : <p className="text-xs leading-5 text-[#64839a]">暂无达到展示阈值的共现关系</p>}
+                  {related.length ? related.map((item) => <button key={item.node.id} type="button" onClick={() => { setClusterId("all"); setSelectedId(item.node.id); }} className="border-b border-[#2a5f86] px-1 py-1.5 text-left text-xs text-[#a9c8dc] transition-colors hover:border-[#73c6ff] hover:text-white"><span>{item.node.label}</span><span className="ml-1.5 font-mono text-[9px] text-[#527995]">{item.weight.toFixed(3)}</span></button>) : <p className="text-xs leading-5 text-[#64839a]">暂无达到展示阈值的共现关系</p>}
                 </div>
               </div>
             </>

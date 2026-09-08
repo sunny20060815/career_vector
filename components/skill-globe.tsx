@@ -330,7 +330,7 @@ export function SkillGlobe({ variant = "default" }: { variant?: "default" | "log
   }, [compact]);
 
   return (
-    <section ref={panelRef} className={`${compact ? "h-44" : "intro-unit h-60 sm:h-64 lg:h-60"} skill-globe relative overflow-hidden border border-[#23466f]`} aria-label="技能共现网络三维动态图">
+    <section ref={panelRef} className={`${compact ? "h-44" : "intro-unit h-72 lg:h-[330px]"} skill-globe signal-frame relative overflow-hidden`} aria-label="技能共现网络三维动态图">
       <div className="globe-copy pointer-events-none absolute inset-x-4 top-3 z-10 flex items-center justify-between sm:inset-x-5 sm:top-4">
         <span className="font-mono text-[9px] tracking-[0.16em] text-[#83bdea]">{compact ? "SKILL GRAPH" : "SKILL CO-OCCURRENCE GLOBE"}</span>
         <span className="flex items-center gap-2 text-[9px] tracking-[0.12em] text-[#789bbd]"><i className="globe-live-dot" />LIVE</span>

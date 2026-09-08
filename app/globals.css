@@ -4,14 +4,16 @@
 
 :root {
   color-scheme: dark;
-  --surface-page: #031326;
-  --surface-sidebar: #041a32;
-  --surface-canvas: #03172d;
-  --surface-raised: #072541;
-  --border-slate: #1d4d74;
-  --accent-blue: #58a6e7;
-  --accent-blue-soft: #0d3d69;
-  --text-main: #e8edf4;
+  --surface-page: #020f20;
+  --surface-sidebar: #031629;
+  --surface-canvas: #04182d;
+  --surface-raised: #07243e;
+  --border-slate: #173f5e;
+  --accent-blue: #73c6ff;
+  --accent-blue-soft: #0b375e;
+  --accent-warm: #ee9870;
+  --text-main: #edf5fa;
+  --text-muted: #84a0b5;
 }
 
 * { box-sizing: border-box; }
@@ -20,7 +22,7 @@ body {
   margin: 0;
   min-width: 320px;
   color: var(--text-main);
-  background: var(--surface-page);
+  background: #020f20;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -30,21 +32,60 @@ button { -webkit-tap-highlight-color: transparent; }
 ::selection { color: #f5f7fa; background: #315f8b; }
 
 .app-shell {
+  position: relative;
   background-color: var(--surface-page);
   background-image:
-    linear-gradient(rgba(88, 166, 231, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(88, 166, 231, 0.028) 1px, transparent 1px);
-  background-size: 34px 34px;
+    linear-gradient(rgba(115, 198, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(115, 198, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(115deg, transparent 0 72%, rgba(238, 152, 112, 0.025) 72% 72.08%, transparent 72.08%);
+  background-size: 48px 48px, 48px 48px, 100% 100%;
+}
+
+.app-shell::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  border: 1px solid rgba(115, 198, 255, 0.035);
+  content: "";
+  pointer-events: none;
+}
+
+.signal-frame {
+  position: relative;
+}
+
+.signal-frame::before,
+.signal-frame::after {
+  position: absolute;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  content: "";
+  pointer-events: none;
+}
+
+.signal-frame::before {
+  top: -1px;
+  left: -1px;
+  border-top: 1px solid var(--accent-blue);
+  border-left: 1px solid var(--accent-blue);
+}
+
+.signal-frame::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 1px solid var(--accent-warm);
+  border-bottom: 1px solid var(--accent-warm);
 }
 
 * {
-  scrollbar-color: #22577f #041a32;
+  scrollbar-color: #2b658e #031629;
   scrollbar-width: thin;
 }
 
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: #041a32; }
-*::-webkit-scrollbar-thumb { background: #22577f; border: 2px solid #041a32; }
+*::-webkit-scrollbar-track { background: #031629; }
+*::-webkit-scrollbar-thumb { background: #2b658e; border: 2px solid #031629; }
 
 .status-dot {
   display: inline-block;
@@ -57,19 +98,18 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .skill-globe {
   isolation: isolate;
-  background-color: #05223f;
+  background-color: rgba(4, 27, 50, 0.42);
   background-image:
-    linear-gradient(rgba(97, 181, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(97, 181, 255, 0.035) 1px, transparent 1px);
-  background-size: 24px 24px;
-  box-shadow: inset 0 0 48px rgba(28, 91, 158, 0.12);
+    linear-gradient(rgba(115, 198, 255, 0.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(115, 198, 255, 0.026) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 
 .skill-globe::after {
   position: absolute;
   inset: 0;
   z-index: 2;
-  border: 1px solid rgba(128, 196, 255, 0.08);
+  border-block: 1px solid rgba(115, 198, 255, 0.13);
   content: "";
   pointer-events: none;
 }

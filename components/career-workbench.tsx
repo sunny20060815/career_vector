@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, BookOpen, Bot, BrainCircuit, BriefcaseBusiness, ChevronRight, CircleCheck, ClipboardCheck, Clock3, Database, GitCompareArrows, GraduationCap, LogOut, MessageSquareText, MessageSquareWarning, Plus, Radar, ShieldCheck, Smartphone, Sparkles, Target, Users } from "lucide-react";
+import { ArrowLeft, ArrowUp, BookOpen, Bot, BrainCircuit, BriefcaseBusiness, ChevronRight, CircleCheck, ClipboardCheck, Clock3, Database, GitCompareArrows, GraduationCap, LogOut, MessageSquareText, MessageSquareWarning, PanelLeft, Plus, Radar, ShieldCheck, Smartphone, Sparkles, SquarePen, Target, Users } from "lucide-react";
 import gsap from "gsap";
 
 import { AboutUs } from "@/components/about-us";
@@ -52,9 +52,12 @@ export function CareerWorkbench() {
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const introRef = useRef<HTMLDivElement>(null);
+  const mobileHistoryRef = useRef<HTMLElement>(null);
+  const mobileHistoryBackdropRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("zhivector-audience");
@@ -98,11 +101,31 @@ export function CareerWorkbench() {
     if (scroll) scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
   }, [messages, loading, preview]);
 
+  useLayoutEffect(() => {
+    if (!mobileHistoryOpen || !mobileHistoryRef.current || !mobileHistoryBackdropRef.current) return;
+    const mm = gsap.matchMedia();
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo(mobileHistoryBackdropRef.current!, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3, ease: "power1.out" });
+      gsap.fromTo(mobileHistoryRef.current!, { xPercent: -100 }, { xPercent: 0, duration: 0.48, ease: "power3.out" });
+    });
+    return () => mm.revert();
+  }, [mobileHistoryOpen]);
+
   function resizeTextarea() {
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+  }
+
+  function closeMobileHistory() {
+    if (!mobileHistoryRef.current || !mobileHistoryBackdropRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setMobileHistoryOpen(false);
+      return;
+    }
+    gsap.timeline({ onComplete: () => setMobileHistoryOpen(false) })
+      .to(mobileHistoryBackdropRef.current, { autoAlpha: 0, duration: 0.28, ease: "power1.in" }, 0)
+      .to(mobileHistoryRef.current, { xPercent: -100, duration: 0.38, ease: "power2.inOut" }, 0);
   }
 
   async function loadConversations() {
@@ -123,6 +146,7 @@ export function CareerWorkbench() {
     })));
     setError("");
     setActiveView("planner");
+    closeMobileHistory();
   }
 
   async function signOut() {
@@ -200,11 +224,11 @@ export function CareerWorkbench() {
   const visibleConversations = historyExpanded ? conversations : conversations.slice(0, 7);
 
   return (
-    <main className="app-shell h-[100dvh] min-h-0 overflow-hidden bg-[#031326] text-[#e8edf1]">
-      <div className="grid h-full grid-cols-1 md:grid-cols-[248px_minmax(0,1fr)]">
-        <aside className="hidden min-h-0 flex-col border-r border-[#174366] bg-[#041a32] md:flex">
-          <div className="border-b border-[#174366] px-5 py-5"><Brand /></div>
-          <div className="px-4 pt-4"><button onClick={() => { setActiveView("planner"); setConversationId(undefined); setMessages([]); }} className="flex h-10 w-full items-center justify-center gap-2 border border-[#5e7d98] bg-[#072541] text-sm text-[#c5d1db] transition hover:border-[#428ecd] hover:text-white" type="button"><Plus size={15} />{audience === "curriculum_designer" ? "新建方案诊断" : "新建规划"}</button></div>
+    <main className="app-shell h-[100dvh] min-h-0 overflow-hidden text-[#edf5fa]">
+      <div className="relative z-[1] grid h-full grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="hidden min-h-0 flex-col border-r border-[#153b57] bg-[#031629]/90 backdrop-blur-xl md:flex">
+          <div className="px-5 pb-5 pt-6"><Brand /></div>
+          <div className="border-y border-[#173f5e] px-4 py-3"><button onClick={() => { setActiveView("planner"); setConversationId(undefined); setMessages([]); }} className="group flex h-11 w-full items-center gap-3 border-l-2 border-[#73c6ff] bg-[#061f38] px-4 text-sm text-[#d8e5ee] transition hover:bg-[#092b49] hover:text-white" type="button"><Plus size={15} className="text-[#73c6ff] transition group-hover:rotate-90" />{audience === "curriculum_designer" ? "新建方案诊断" : "新建规划"}</button></div>
           <div className="mt-6 flex items-center gap-2 px-5 text-[11px] font-medium tracking-[0.12em] text-[#58768f]"><Clock3 size={13} />{audience === "curriculum_designer" ? "方案咨询记录" : "历史咨询"}</div>
           <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-3 pb-3">
             <div className="flex flex-col gap-1">
@@ -213,35 +237,58 @@ export function CareerWorkbench() {
               {conversations.length > 7 && <button onClick={() => setHistoryExpanded((value) => !value)} className="mt-2 flex h-9 items-center justify-center gap-1 border border-[#1a4a72] text-xs text-[#5f809b] transition hover:border-[#6a879f] hover:text-[#b4c4d1]" type="button">{historyExpanded ? "收起历史记录" : `展开其余 ${conversations.length - 7} 条`}<ChevronRight size={13} className={`transition ${historyExpanded ? "-rotate-90" : "rotate-90"}`} /></button>}
             </div>
           </div>
-          <div className="border-t border-[#174366] p-4"><div className="flex items-center gap-2 text-xs text-[#6989a3]"><CircleCheck size={14} className="text-[#428ecd]" /><span className="truncate">{userIdentity ?? "等待登录"}</span></div>{userIdentity && <button onClick={() => void signOut()} className="mt-3 flex items-center gap-2 text-xs text-[#b98573] transition hover:text-[#ef9b7e]" type="button"><LogOut size={13} />退出登录</button>}</div>
+          <div className="border-t border-[#153b57] p-4"><div className="flex items-center gap-2 text-xs text-[#7f9caf]"><CircleCheck size={14} className="text-[#73c6ff]" /><span className="truncate">{userIdentity ?? "等待登录"}</span></div>{userIdentity && <button onClick={() => void signOut()} className="mt-3 flex items-center gap-2 text-xs text-[#c78a70] transition hover:text-[#f2a17d]" type="button"><LogOut size={13} />退出登录</button>}</div>
         </aside>
 
-        <section className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#03172d]">
-          <header className="shrink-0 border-b border-[#174366] bg-[#041a32]/95">
-            <div className="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 md:px-7"><div className="md:hidden"><Brand /></div><div className="hidden items-center gap-3 text-xs text-[#6686a1] md:flex"><span className="status-dot" />职业技能数据引擎已连接</div>{audience && <AudienceSwitch audience={audience} onChange={chooseAudience} />}<div className="flex items-center gap-2 text-[10px] tracking-[0.12em] text-[#526f87]"><Database size={13} />DATASET 2014—2026.03</div></div>
-            <nav className="flex h-11 items-stretch gap-5 overflow-x-auto border-t border-[#12375a] px-4 md:gap-6 md:px-7" aria-label="主导航">
+        <section className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#03162a]/55">
+          <header className="shrink-0 border-b border-[#153b57] bg-[#020f20]/82 backdrop-blur-xl">
+            <div className="flex min-h-[72px] flex-wrap items-center gap-x-6 px-4 md:px-7">
+              <div className="relative flex h-20 w-full items-center justify-center md:hidden">
+                <button type="button" onClick={() => setMobileHistoryOpen(true)} className="absolute left-0 grid h-10 w-10 place-items-center text-[#8cacbf] transition hover:bg-[#0a2945]/55 hover:text-white" aria-label="打开历史咨询" title="历史咨询"><PanelLeft size={20} strokeWidth={1.7} /></button>
+                <div className="flex flex-col items-center text-center"><p className="font-serif text-lg text-white">职向量</p>{audience && <AudienceSwitch audience={audience} onChange={chooseAudience} />}</div>
+                <button type="button" onClick={() => { setActiveView("planner"); setConversationId(undefined); setMessages([]); setQuestion(""); setError(""); }} className="absolute right-0 grid h-10 w-10 place-items-center text-[#73c6ff] transition hover:bg-[#0a2945]/55 hover:text-white" aria-label={audience === "curriculum_designer" ? "新建方案诊断" : "新建咨询"} title={audience === "curriculum_designer" ? "新建方案诊断" : "新建咨询"}><SquarePen size={20} strokeWidth={1.7} /></button>
+              </div>
+              <div className="hidden items-center gap-3 text-[11px] tracking-[0.08em] text-[#68879e] xl:flex"><span className="status-dot" />LIVE DATA ENGINE</div>
+              <nav className="order-3 flex h-12 w-full items-stretch gap-5 overflow-x-auto border-t border-[#153b57] md:order-none md:h-[72px] md:w-auto md:flex-1 md:gap-7 md:border-t-0" aria-label="主导航">
               <ViewTab active={activeView === "planner"} icon={Radar} label="职业规划" onClick={() => setActiveView("planner")} />
               <ViewTab active={activeView === "methods"} icon={BookOpen} label="数据与方法" onClick={() => setActiveView("methods")} />
               <ViewTab active={activeView === "about"} icon={Users} label="关于我们" onClick={() => setActiveView("about")} />
               <ViewTab active={activeView === "feedback"} icon={MessageSquareWarning} label="问题反馈" onClick={() => setActiveView("feedback")} />
-            </nav>
+              </nav>
+              {audience && <div className="hidden md:block"><AudienceSwitch audience={audience} onChange={chooseAudience} /></div>}
+              <div className="hidden items-center gap-2 text-[9px] tracking-[0.14em] text-[#58758b] lg:flex"><Database size={12} />2014—2026.03</div>
+            </div>
+            {activeView !== "planner" && <button type="button" onClick={() => setActiveView("planner")} className="flex h-10 w-full items-center gap-2 border-t border-[#153b57] px-4 text-xs text-[#85a6bd] transition hover:text-white md:hidden"><ArrowLeft size={14} />返回职业规划</button>}
           </header>
 
           {activeView === "planner" ? <>
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-48 pt-6 md:px-8 md:pb-52 lg:px-12">
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-48 pt-5 md:px-8 md:pb-52 lg:px-12">
               {!messages.length && !loading ? <Intro audience={audience ?? "individual"} containerRef={introRef} onExample={(value) => { setQuestion(value); requestAnimationFrame(resizeTextarea); }} /> : <div className="mx-auto max-w-5xl space-y-7">{messages.map((message, index) => <MessageBlock key={message.id} audience={audience ?? "individual"} message={message} showSuggestions={!loading && index === messages.length - 1} onSuggestedQuestion={(value) => void sendQuestion(value)} />)}{loading && <ThinkingIndicator progress={progress} preview={preview} question={[...messages].reverse().find((message) => message.role === "user")?.content ?? ""} />}</div>}
             </div>
 
-            <div className="composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-20 border-t border-[#174366] bg-[#03172d]/95 px-3 pb-3 pt-3 md:px-8 md:pb-6 lg:px-12">
-            <form onSubmit={(event) => void submit(event)} className="pointer-events-auto mx-auto max-w-5xl border border-[#2b658f] bg-[#072541] shadow-[0_-16px_50px_rgba(0,0,0,0.36)] focus-within:border-[#438dc9]">
+            <div className="composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-[#020f20]/88 px-3 pb-3 pt-3 backdrop-blur-xl md:px-8 md:pb-6 lg:px-12">
+            <form onSubmit={(event) => void submit(event)} className="signal-frame pointer-events-auto mx-auto max-w-5xl border border-[#28658e] bg-[#041b32]/95 shadow-[0_-20px_60px_rgba(0,0,0,0.32)] focus-within:border-[#73c6ff]">
               <textarea ref={textareaRef} value={question} onChange={(event) => { setQuestion(event.target.value); resizeTextarea(); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} rows={2} placeholder={audience === "curriculum_designer" ? "输入学校、年级、专业及希望诊断的培养目标或课程问题…" : "描述你的专业、技能、经验与目标城市…"} className="block min-h-20 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-6 text-[#edf1f5] outline-none placeholder:text-[#486176] md:px-5" />
-              <div className="flex items-center justify-between border-t border-[#174166] px-4 py-2.5"><span className="text-[11px] text-[#547188]">Enter 发送 · Shift + Enter 换行</span><button disabled={loading || !question.trim()} className="grid h-9 w-9 place-items-center bg-[#387fb9] text-[#202b3a] transition hover:bg-[#63a6dd] disabled:cursor-not-allowed disabled:bg-[#1c4567] disabled:text-[#4c677d]" type="submit" aria-label="提交咨询"><ArrowUp size={17} /></button></div>
+              <div className="flex items-center justify-between border-t border-[#174166] px-4 py-2.5"><span className="text-[11px] text-[#547188]">Enter 发送 · Shift + Enter 换行</span><button disabled={loading || !question.trim()} className="grid h-9 w-9 place-items-center bg-[#73c6ff] text-[#071a2a] transition hover:bg-[#9ad7ff] disabled:cursor-not-allowed disabled:bg-[#1c4567] disabled:text-[#4c677d]" type="submit" aria-label="提交咨询"><ArrowUp size={17} /></button></div>
             </form>
             {error && <p className="pointer-events-auto mx-auto mt-2 max-w-5xl border-l-2 border-[#e07c58] bg-[#251511] px-3 py-2 text-xs text-[#efaa90]">{error}</p>}
             </div>
           </> : activeView === "methods" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><DataMethods /></div> : activeView === "feedback" ? <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><FeedbackPanel userIdentity={userIdentity} /></div> : <div className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8 lg:px-12"><AboutUs /></div>}
         </section>
       </div>
+      {mobileHistoryOpen && <div className="fixed inset-0 z-40 md:hidden">
+        <button ref={mobileHistoryBackdropRef} type="button" aria-label="关闭历史咨询" onClick={closeMobileHistory} className="fixed inset-0 bg-[#010a16]/74 backdrop-blur-[3px]" />
+        <aside ref={mobileHistoryRef} className="signal-frame fixed inset-y-0 left-0 flex h-[100dvh] w-3/4 flex-col border-r border-[#2a628a] bg-[#031629] shadow-[28px_0_80px_rgba(0,0,0,0.48)]">
+          <div className="flex items-center justify-between border-b border-[#173f5e] px-5 py-5"><Brand /><button type="button" onClick={closeMobileHistory} className="grid h-9 w-9 place-items-center text-[#7ca3bf] transition hover:text-white" aria-label="关闭历史咨询"><ArrowLeft size={17} /></button></div>
+          <div className="px-4 py-4"><button onClick={() => { setActiveView("planner"); setConversationId(undefined); setMessages([]); closeMobileHistory(); }} className="flex h-11 w-full items-center gap-3 border-l-2 border-[#73c6ff] bg-[#061f38] px-4 text-sm text-[#d8e5ee]" type="button"><Plus size={15} className="text-[#73c6ff]" />{audience === "curriculum_designer" ? "新建方案诊断" : "新建规划"}</button></div>
+          <div className="flex items-center gap-2 px-5 pb-3 text-[11px] font-medium tracking-[0.12em] text-[#58768f]"><Clock3 size={13} />{audience === "curriculum_designer" ? "方案咨询记录" : "历史咨询"}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+            {conversations.map((item) => <button key={item.id} title={item.title} onClick={() => void chooseConversation(item.id)} className={`flex h-12 w-full min-w-0 items-center gap-2 border-l px-3 text-left text-sm ${item.id === conversationId ? "border-[#73c6ff] bg-[#0d355c] text-white" : "border-transparent text-[#7895aa]"}`} type="button"><MessageSquareText size={13} className="shrink-0 opacity-60" /><span className="truncate">{item.title}</span></button>)}
+            {!conversations.length && <p className="px-3 py-4 text-xs leading-6 text-[#587186]">{audience === "curriculum_designer" ? "新的方案诊断将在这里留存。" : "新的职业规划将在这里留存。"}</p>}
+          </div>
+          <div className="border-t border-[#173f5e] p-5"><div className="flex items-center gap-2 text-xs text-[#8aa4b7]"><CircleCheck size={14} className="text-[#73c6ff]" /><span className="truncate">{userIdentity ?? "等待登录"}</span></div>{userIdentity && <button onClick={() => void signOut()} className="mt-3 flex items-center gap-2 text-xs text-[#d19073]" type="button"><LogOut size={13} />退出登录</button>}</div>
+        </aside>
+      </div>}
       {authChecked && !userIdentity && <LoginOverlay />}
       {authChecked && userIdentity && audienceLoaded && !audience && <AudienceChooser onSelect={chooseAudience} />}
     </main>
@@ -249,25 +296,47 @@ export function CareerWorkbench() {
 }
 
 function ViewTab({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof Radar; label: string; onClick: () => void }) {
-  return <button onClick={onClick} type="button" className={`relative flex items-center gap-2 px-0 text-xs transition ${active ? "text-[#62a6de]" : "text-[#5e7e99] hover:text-[#c5d1db]"}`} aria-current={active ? "page" : undefined}><Icon size={14} />{label}<span className={`absolute inset-x-0 bottom-0 h-0.5 transition ${active ? "bg-[#4992cd]" : "bg-transparent"}`} /></button>;
+  return <button onClick={onClick} type="button" className={`relative flex shrink-0 items-center gap-2 px-0 text-xs transition ${active ? "text-white" : "text-[#67869d] hover:text-[#cbd9e3]"}`} aria-current={active ? "page" : undefined}><Icon size={14} className={active ? "text-[#73c6ff]" : ""} />{label}<span className={`absolute bottom-0 left-0 h-0.5 transition-all ${active ? "w-full bg-[#73c6ff]" : "w-0 bg-transparent"}`} /></button>;
 }
 
 function Brand() {
-  return <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center border border-[#2e81c5] bg-[#0c3a67] text-[#5ca7e4]"><Radar size={19} /></span><div><p className="font-serif text-lg text-white">职向量</p><p className="text-[10px] tracking-[0.18em] text-[#62839e]">CAREER INTELLIGENCE</p></div></div>;
+  return <div className="flex items-center gap-3"><span className="signal-frame grid h-10 w-10 place-items-center border border-[#2e81c5] bg-[#06223d] text-[#73c6ff]"><Radar size={19} /></span><div><p className="font-serif text-xl text-white">职向量</p><p className="text-[9px] tracking-[0.2em] text-[#69879d]">CAREER INTELLIGENCE</p></div></div>;
 }
 
 function AudienceSwitch({ audience, onChange }: { audience: UserAudience; onChange: (audience: UserAudience) => void }) {
-  return <div className="order-3 flex h-9 w-full border border-[#285b83] bg-[#051d35] p-1 sm:order-none sm:w-auto" aria-label="使用身份"><button onClick={() => audience !== "individual" && onChange("individual")} className={`flex flex-1 items-center justify-center gap-1.5 px-3 text-[11px] transition sm:flex-none ${audience === "individual" ? "bg-[#246fa8] text-white" : "text-[#6788a2] hover:text-[#c8d5df]"}`} type="button"><BriefcaseBusiness size={13} /><span className="sm:hidden">个人端</span><span className="hidden sm:inline">学生／求职者</span></button><button onClick={() => audience !== "curriculum_designer" && onChange("curriculum_designer")} className={`flex flex-1 items-center justify-center gap-1.5 px-3 text-[11px] transition sm:flex-none ${audience === "curriculum_designer" ? "bg-[#246fa8] text-white" : "text-[#6788a2] hover:text-[#c8d5df]"}`} type="button"><GraduationCap size={13} /><span className="sm:hidden">培养端</span><span className="hidden sm:inline">培养方案制定者</span></button></div>;
+  return <div className="order-2 flex h-9 border-b border-[#285b83] sm:order-none" aria-label="使用身份"><button onClick={() => audience !== "individual" && onChange("individual")} className={`relative flex items-center justify-center gap-1.5 px-3 text-[11px] transition ${audience === "individual" ? "text-white" : "text-[#6788a2] hover:text-[#c8d5df]"}`} type="button"><BriefcaseBusiness size={13} /><span className="sm:hidden">个人端</span><span className="hidden sm:inline">学生／求职者</span>{audience === "individual" && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-[#73c6ff]" />}</button><button onClick={() => audience !== "curriculum_designer" && onChange("curriculum_designer")} className={`relative flex items-center justify-center gap-1.5 px-3 text-[11px] transition ${audience === "curriculum_designer" ? "text-white" : "text-[#6788a2] hover:text-[#c8d5df]"}`} type="button"><GraduationCap size={13} /><span className="sm:hidden">培养端</span><span className="hidden sm:inline">培养方案制定者</span>{audience === "curriculum_designer" && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-[#73c6ff]" />}</button></div>;
 }
 
 function AudienceChooser({ onSelect }: { onSelect: (audience: UserAudience) => void }) {
-  return <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-[#031326]/95 p-4 backdrop-blur-md"><section className="w-full max-w-3xl border border-[#285b83] bg-[#041a32] p-5 shadow-[0_28px_100px_rgba(0,0,0,0.65)] sm:p-8"><p className="text-xs font-semibold tracking-[0.18em] text-[#4f98d3]">SELECT YOUR ROLE</p><h2 className="mt-3 font-serif text-2xl text-white sm:text-3xl">你想用职向量解决什么问题？</h2><p className="mt-3 text-sm leading-6 text-[#7895ac]">不同身份调用同一套招聘数据，但分析目标与建议口径不同，之后可随时切换。</p><div className="mt-7 grid gap-3 sm:grid-cols-2"><button onClick={() => onSelect("individual")} className="group min-h-44 border border-[#285b83] bg-[#061f39] p-5 text-left transition hover:border-[#559bd3] hover:bg-[#0b3154]" type="button"><BriefcaseBusiness className="text-[#5aa2dc]" size={24} /><h3 className="mt-5 text-base font-semibold text-white">学生／求职者</h3><p className="mt-2 text-sm leading-6 text-[#7895ac]">分析个人技能、职业匹配、工资前景、城市机会与能力提升路径。</p></button><button onClick={() => onSelect("curriculum_designer")} className="group min-h-44 border border-[#285b83] bg-[#061f39] p-5 text-left transition hover:border-[#559bd3] hover:bg-[#0b3154]" type="button"><GraduationCap className="text-[#5aa2dc]" size={26} /><h3 className="mt-5 text-base font-semibold text-white">培养方案制定者</h3><p className="mt-2 text-sm leading-6 text-[#7895ac]">对照历年培养方案与真实岗位需求，诊断课程技能供给并提出修订建议。</p></button></div></section></div>;
+  return <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-[#020f20]/96 p-5 backdrop-blur-xl"><section className="w-full max-w-4xl"><div className="flex items-center gap-3 text-[10px] font-semibold tracking-[0.2em] text-[#73c6ff]"><span className="h-px w-10 bg-[#73c6ff]" />SELECT YOUR ROLE</div><h2 className="mt-5 max-w-2xl font-serif text-3xl leading-tight text-white sm:text-4xl">你想用职向量解决什么问题？</h2><p className="mt-4 max-w-2xl text-sm leading-7 text-[#7f9baf]">不同身份调用同一套招聘数据，但分析目标与建议口径不同，之后可随时切换。</p><div className="mt-10 border-y border-[#214c6c]"><button onClick={() => onSelect("individual")} className="group grid w-full gap-4 border-b border-[#214c6c] py-6 text-left transition hover:bg-[#06223b]/70 sm:grid-cols-[48px_180px_1fr_24px] sm:items-center sm:px-5" type="button"><span className="grid h-10 w-10 place-items-center text-[#73c6ff]"><BriefcaseBusiness size={24} /></span><h3 className="text-lg font-semibold text-white">学生／求职者</h3><p className="text-sm leading-6 text-[#7895ac]">分析个人技能、职业匹配、工资前景、城市机会与能力提升路径。</p><ChevronRight className="hidden text-[#52738a] transition group-hover:translate-x-1 group-hover:text-[#73c6ff] sm:block" size={18} /></button><button onClick={() => onSelect("curriculum_designer")} className="group grid w-full gap-4 py-6 text-left transition hover:bg-[#06223b]/70 sm:grid-cols-[48px_180px_1fr_24px] sm:items-center sm:px-5" type="button"><span className="grid h-10 w-10 place-items-center text-[#73c6ff]"><GraduationCap size={26} /></span><h3 className="text-lg font-semibold text-white">培养方案制定者</h3><p className="text-sm leading-6 text-[#7895ac]">对照历年培养方案与真实岗位需求，诊断课程技能供给并提出修订建议。</p><ChevronRight className="hidden text-[#52738a] transition group-hover:translate-x-1 group-hover:text-[#73c6ff] sm:block" size={18} /></button></div></section></div>;
 }
 
 function Intro({ audience, containerRef, onExample }: { audience: UserAudience; containerRef: React.RefObject<HTMLDivElement | null>; onExample: (value: string) => void }) {
   const isDesigner = audience === "curriculum_designer";
   const examples = isDesigner ? curriculumExamples : individualExamples;
-  return <div ref={containerRef} className="mx-auto flex min-h-[calc(100vh-18rem)] max-w-6xl flex-col justify-center py-8"><div className="grid items-end gap-10 lg:grid-cols-[minmax(0,1fr)_360px]"><div><p className="intro-unit text-xs font-semibold tracking-[0.2em] text-[#4594d5]">{isDesigner ? "CURRICULUM INTELLIGENCE" : "LABOR MARKET SIGNAL SYSTEM"}</p><h1 className="intro-unit mt-4 max-w-3xl font-serif text-3xl leading-tight text-white md:text-4xl lg:text-[44px]">{isDesigner ? "让培养方案回应真实岗位与未来技能" : "把专业、技能与真实岗位需求连接起来"}</h1><p className="intro-unit mt-4 max-w-2xl text-sm leading-7 text-[#7f9ab0]">{isDesigner ? "将培养目标、课程体系与招聘市场中的职业、技能和人工智能影响相连接，识别培养优势、能力缺口与可执行的课程调整方向。" : "输入你的年级、专业、技能或求职偏好。职向量会从招聘数据中匹配职业方向、工资前景、城市机会与下一项能力投资。"}</p><p className="intro-unit mt-5 max-w-3xl border-l-2 border-[#e58b62] bg-[#061f39] px-4 py-3 text-sm leading-6 text-[#a6b9c8]">{isDesigner ? "当前已接入首都经济贸易大学2023、2024、2025级全部专业培养方案，可比较历年培养目标、课程能力供给与岗位需求。招聘数据用于提供市场信号，不替代学科定位与教育价值判断。" : "职向量可以结合学校培养方案，为你提供更有针对性的职业与技能规划。目前已接入首都经济贸易大学2023、2024、2025级培养方案；首经贸学生可按类似“首经贸2024级经济学（实验班）”的形式输入自己的年级和专业。如需接入其他院校，欢迎在“问题反馈”中留言。"}</p></div><SignalMatrix /></div><div className="mt-10 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">{examples.map((example) => { const Icon = example.icon; return <button key={example.title} onClick={() => onExample(example.text)} type="button" className="intro-unit group min-h-48 border border-[#1a4a72] bg-[#061f39] p-4 text-left transition hover:border-[#3c80b8] hover:bg-[#0b3154]"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center border border-[#285f88] text-[#519ad5]"><Icon size={16} /></span><ChevronRight className="text-[#42596b] transition group-hover:translate-x-1 group-hover:text-[#65a9e1]" size={15} /></div><p className="mt-4 text-sm font-semibold text-[#e2e8ed]">{example.title}</p><p className="mt-2 line-clamp-3 text-xs leading-5 text-[#6f8da6]">{example.text}</p><p className="mt-3 text-[10px] tracking-[0.08em] text-[#b17860]">{example.note}</p></button>; })}</div></div>;
+  return (
+    <div ref={containerRef} className="mx-auto flex min-h-[calc(100vh-14rem)] max-w-7xl flex-col justify-center py-8 md:py-12">
+      <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)] lg:gap-14">
+        <div>
+          <div className="intro-unit flex items-center gap-3 text-[10px] font-semibold tracking-[0.2em] text-[#73c6ff]"><span className="h-px w-10 bg-[#73c6ff]" />{isDesigner ? "CURRICULUM INTELLIGENCE" : "LABOR MARKET SIGNAL SYSTEM"}</div>
+          <h1 className="intro-unit mt-5 max-w-3xl font-serif text-4xl leading-tight text-white md:text-5xl lg:text-[52px]">{isDesigner ? "让培养方案回应真实岗位与未来技能" : "把专业、技能与真实岗位需求连接起来"}</h1>
+          <p className="intro-unit mt-5 max-w-2xl text-sm leading-8 text-[#8ba4b7]">{isDesigner ? "将培养目标、课程体系与招聘市场中的职业、技能和人工智能影响相连接，识别培养优势、能力缺口与可执行的课程调整方向。" : "输入你的年级、专业、技能或求职偏好。职向量会从招聘数据中匹配职业方向、工资前景、城市机会与下一项能力投资。"}</p>
+          <p className="intro-unit mt-7 max-w-3xl border-y border-[#244c68] py-4 text-xs leading-6 text-[#9bb0bf]"><span className="mr-3 text-[#ee9870]">DATA NOTE</span>{isDesigner ? "当前已接入首都经济贸易大学2023、2024、2025级全部专业培养方案，可比较历年培养目标、课程能力供给与岗位需求。招聘数据用于提供市场信号，不替代学科定位与教育价值判断。" : "职向量可以结合学校培养方案，为你提供更有针对性的职业与技能规划。目前已接入首都经济贸易大学2023、2024、2025级培养方案；首经贸学生可按类似“首经贸2024级经济学（实验班）”的形式输入自己的年级和专业。如需接入其他院校，欢迎在“问题反馈”中留言。"}</p>
+        </div>
+        <SignalMatrix />
+      </div>
+
+      <div className="intro-unit mt-12">
+        <div className="mb-3 flex items-end justify-between gap-4"><p className="text-xs font-medium text-[#a9bcc9]">从一个问题开始</p><p className="hidden font-mono text-[9px] tracking-[0.12em] text-[#527087] sm:block">SELECT A QUERY / EDIT BEFORE SENDING</p></div>
+        <div className="border-y border-[#214c6c]">
+          {examples.map((example, index) => {
+            const Icon = example.icon;
+            return <button key={example.title} onClick={() => onExample(example.text)} type="button" className={`group grid w-full gap-3 py-4 text-left transition hover:bg-[#06223b]/65 sm:grid-cols-[34px_44px_150px_minmax(0,1fr)_auto_20px] sm:items-center sm:px-4 ${index ? "border-t border-[#173f5e]" : ""}`}><span className="font-mono text-[10px] text-[#4f728d]">{String(index + 1).padStart(2, "0")}</span><span className="grid h-9 w-9 place-items-center text-[#73c6ff]"><Icon size={17} /></span><span className="text-sm font-semibold text-[#e3edf4]">{example.title}</span><span className="line-clamp-2 text-xs leading-5 text-[#728fa5]">{example.text}</span><span className="hidden text-[9px] tracking-[0.08em] text-[#c98568] lg:block">{example.note}</span><ChevronRight className="hidden text-[#496b83] transition group-hover:translate-x-1 group-hover:text-[#73c6ff] sm:block" size={15} /></button>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function LoginOverlay() {
@@ -352,29 +421,29 @@ function LoginOverlay() {
   }
 
   return (
-    <div ref={overlayRef} className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#04152b]/95 p-4 backdrop-blur-md">
-      <div ref={panelRef} className="grid w-full max-w-4xl overflow-hidden border border-[#255c85] bg-[#041a32] shadow-[0_28px_100px_rgba(0,0,0,0.72)] md:grid-cols-[0.9fr_1.1fr]">
-        <div className="relative hidden min-h-[520px] overflow-hidden border-r border-[#1e5078] bg-[#03172d] p-8 md:block">
+    <div ref={overlayRef} className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#020f20]/97 p-4 backdrop-blur-xl">
+      <div ref={panelRef} className="grid w-full max-w-6xl overflow-hidden md:min-h-[640px] md:grid-cols-[1.08fr_0.92fr]">
+        <div className="relative hidden overflow-hidden border-r border-[#1e5078] p-10 md:block">
           <div className="login-unit"><Brand /></div>
-          <div className="login-unit mt-16"><p className="text-xs tracking-[0.18em] text-[#428ecd]">YOUR CAREER, IN SIGNALS</p><h2 className="mt-4 font-serif text-3xl leading-tight text-white">从专业培养<br />走向真实市场</h2><p className="mt-4 text-sm leading-7 text-[#708fa8]">854万余条招聘信息，连接技能、职业、城市与人工智能影响。</p></div>
-          <div className="login-unit absolute inset-x-8 bottom-8"><SkillGlobe variant="login" /></div>
+          <div className="login-unit mt-20 max-w-md"><div className="flex items-center gap-3 text-[10px] tracking-[0.2em] text-[#73c6ff]"><span className="h-px w-10 bg-[#73c6ff]" />YOUR CAREER, IN SIGNALS</div><h2 className="mt-5 font-serif text-4xl leading-tight text-white">从专业培养<br />走向真实市场</h2><p className="mt-5 text-sm leading-7 text-[#7f9caf]">854万余条招聘信息，连接技能、职业、城市与人工智能影响。</p></div>
+          <div className="login-unit absolute inset-x-10 bottom-10"><SkillGlobe variant="login" /></div>
         </div>
-        <div className="flex min-h-[460px] flex-col justify-center p-6 sm:p-10 md:p-12">
-          <p className="login-unit text-xs font-semibold tracking-[0.2em] text-[#4594d5]">SECURE ACCESS</p>
-          <h2 className="login-unit mt-4 font-serif text-3xl text-white">手机号登录</h2>
-          <p className="login-unit mt-3 text-sm leading-6 text-[#7391a9]">使用短信验证码登录职向量，无需设置密码。</p>
+        <div className="signal-frame flex min-h-[520px] flex-col justify-center border-y border-[#214c6c] bg-[#04182d]/55 p-7 sm:p-12 md:border-y-0 md:border-r md:p-14">
+          <div className="login-unit flex items-center gap-3 text-[10px] font-semibold tracking-[0.2em] text-[#73c6ff]"><span className="h-px w-8 bg-[#73c6ff]" />SECURE ACCESS</div>
+          <h2 className="login-unit mt-5 font-serif text-4xl text-white">手机号登录</h2>
+          <p className="login-unit mt-4 text-sm leading-7 text-[#7f9caf]">使用短信验证码登录职向量，无需设置密码。</p>
           {stage === "phone" ? (
             <form onSubmit={(event) => void sendCode(event)} className="login-unit mt-8">
               <label htmlFor="login-phone" className="text-xs font-medium text-[#87a1b6]">手机号码</label>
-              <div className="mt-2 flex h-12 items-center border border-[#2b658f] bg-[#072541] px-3 focus-within:border-[#4792cf]"><Smartphone size={17} className="mr-3 shrink-0 text-[#4c94cf]" /><span className="mr-2 text-sm text-[#7692a8]">+86</span><input id="login-phone" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))} type="tel" inputMode="numeric" autoComplete="tel" required pattern="1[3-9][0-9]{9}" placeholder="请输入11位手机号" className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-white outline-none placeholder:text-[#42596b]" /></div>
-              <button disabled={submitting || phone.length !== 11} className="mt-4 flex h-12 w-full items-center justify-center gap-2 bg-[#3b85c2] text-sm font-semibold text-[#202b3a] transition hover:bg-[#64a8df] disabled:cursor-not-allowed disabled:bg-[#1c4567] disabled:text-[#526e85]" type="submit">{submitting ? "正在发送…" : "获取验证码"}<ArrowUp className="rotate-45" size={16} /></button>
+              <div className="mt-2 flex h-14 items-center border-b border-[#34739e] px-1 focus-within:border-[#73c6ff]"><Smartphone size={17} className="mr-3 shrink-0 text-[#73c6ff]" /><span className="mr-2 text-sm text-[#7692a8]">+86</span><input id="login-phone" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))} type="tel" inputMode="numeric" autoComplete="tel" required pattern="1[3-9][0-9]{9}" placeholder="请输入11位手机号" className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-white outline-none placeholder:text-[#42596b]" /></div>
+              <button disabled={submitting || phone.length !== 11} className="mt-6 flex h-12 w-full items-center justify-center gap-2 bg-[#73c6ff] text-sm font-semibold text-[#071a2a] transition hover:bg-[#9ad7ff] disabled:cursor-not-allowed disabled:bg-[#1c4567] disabled:text-[#526e85]" type="submit">{submitting ? "正在发送…" : "获取验证码"}<ArrowUp className="rotate-45" size={16} /></button>
             </form>
           ) : (
             <form onSubmit={(event) => void verifyCode(event)} className="login-unit mt-8">
               <div className="flex items-center justify-between text-xs"><span className="text-[#87a1b6]">验证码已发送至 +86 {phone.slice(0, 3)}****{phone.slice(-4)}</span><button type="button" onClick={() => { setStage("phone"); setCode(""); setError(""); }} className="flex items-center gap-1 text-[#63a3d8]"><ArrowLeft size={13} />更换号码</button></div>
               <label htmlFor="login-code" className="mt-5 block text-xs font-medium text-[#87a1b6]">短信验证码</label>
-              <div className="mt-2 flex h-12 items-center border border-[#2b658f] bg-[#072541] px-3 focus-within:border-[#4792cf]"><ShieldCheck size={17} className="mr-3 shrink-0 text-[#4c94cf]" /><input id="login-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))} type="text" inputMode="numeric" autoComplete="one-time-code" required autoFocus placeholder="请输入短信验证码" className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-white outline-none placeholder:text-[#42596b]" /></div>
-              <button disabled={submitting || code.length < 4} className="mt-4 flex h-12 w-full items-center justify-center gap-2 bg-[#3b85c2] text-sm font-semibold text-[#202b3a] transition hover:bg-[#64a8df] disabled:cursor-not-allowed disabled:bg-[#1c4567] disabled:text-[#526e85]" type="submit">{submitting ? "正在登录…" : "验证并登录"}</button>
+              <div className="mt-2 flex h-14 items-center border-b border-[#34739e] px-1 focus-within:border-[#73c6ff]"><ShieldCheck size={17} className="mr-3 shrink-0 text-[#73c6ff]" /><input id="login-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))} type="text" inputMode="numeric" autoComplete="one-time-code" required autoFocus placeholder="请输入短信验证码" className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-white outline-none placeholder:text-[#42596b]" /></div>
+              <button disabled={submitting || code.length < 4} className="mt-6 flex h-12 w-full items-center justify-center gap-2 bg-[#73c6ff] text-sm font-semibold text-[#071a2a] transition hover:bg-[#9ad7ff] disabled:cursor-not-allowed disabled:bg-[#1c4567] disabled:text-[#526e85]" type="submit">{submitting ? "正在登录…" : "验证并登录"}</button>
               <button disabled={submitting || cooldown > 0} onClick={(event) => void sendCode(event)} type="button" className="mt-4 w-full text-center text-xs text-[#63a3d8] disabled:text-[#486176]">{cooldown > 0 ? `${cooldown}秒后可重新发送` : "重新发送验证码"}</button>
             </form>
           )}
@@ -398,8 +467,8 @@ function MessageBlock({ audience, message, showSuggestions, onSuggestedQuestion 
     mm.add("(prefers-reduced-motion: no-preference)", () => { gsap.fromTo(ref.current!, { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.48, ease: "power2.out" }); });
     return () => mm.revert();
   }, []);
-  if (message.role === "user") return <div ref={ref as React.RefObject<HTMLDivElement>} className="ml-auto max-w-3xl border border-[#255c85] bg-[#0e3157] px-4 py-3"><p className="text-[10px] font-semibold tracking-[0.14em] text-[#5097d2]">你的问题</p><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[#dbe3e9]">{message.content}</p></div>;
-  return <article ref={ref as React.RefObject<HTMLElement>} className="max-w-4xl border-l-2 border-[#d98560] bg-[#061f39] px-5 py-5"><div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.16em] text-[#d98c68]"><MessageSquareText size={14} />{audience === "curriculum_designer" ? "培养方案诊断建议" : "职业规划建议"}</div><AnswerContent content={message.content} />{message.evidence && <Evidence evidence={message.evidence} />}{showSuggestions && message.suggestedQuestions?.length ? <div className="mt-5 border-t border-[#1d4d74] pt-4"><p className="flex items-center gap-2 text-[11px] font-medium tracking-[0.08em] text-[#62a2d7]"><Sparkles size={13} />你可能还想问</p><div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">{message.suggestedQuestions.map((question) => <button key={question} onClick={() => onSuggestedQuestion(question)} className="group flex min-h-10 w-full items-center justify-between gap-3 border border-[#255c85] bg-[#072541] px-3 py-2.5 text-left text-xs leading-5 text-[#a9bccb] transition hover:border-[#458eca] hover:text-white sm:w-auto" type="button"><span>{question}</span><ChevronRight size={13} className="shrink-0 text-[#496276] transition group-hover:translate-x-0.5 group-hover:text-[#60a4db]" /></button>)}</div></div> : null}</article>;
+  if (message.role === "user") return <div ref={ref as React.RefObject<HTMLDivElement>} className="ml-auto max-w-3xl border-r-2 border-[#73c6ff] bg-[#082943]/55 px-5 py-4"><p className="text-[10px] font-semibold tracking-[0.14em] text-[#73c6ff]">你的问题</p><p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[#dbe6ed]">{message.content}</p></div>;
+  return <article ref={ref as React.RefObject<HTMLElement>} className="max-w-4xl border-t border-[#214c6c] py-6"><div className="flex items-center gap-3 text-[10px] font-semibold tracking-[0.16em] text-[#ee9870]"><span className="h-px w-8 bg-[#ee9870]" /><MessageSquareText size={14} />{audience === "curriculum_designer" ? "培养方案诊断建议" : "职业规划建议"}</div><AnswerContent content={message.content} />{message.evidence && <Evidence evidence={message.evidence} />}{showSuggestions && message.suggestedQuestions?.length ? <div className="mt-6 border-t border-[#173f5e] pt-4"><p className="flex items-center gap-2 text-[11px] font-medium tracking-[0.08em] text-[#73c6ff]"><Sparkles size={13} />你可能还想问</p><div className="mt-3 border-y border-[#173f5e]">{message.suggestedQuestions.map((question, index) => <button key={question} onClick={() => onSuggestedQuestion(question)} className={`group flex min-h-11 w-full items-center justify-between gap-3 px-2 py-3 text-left text-xs leading-5 text-[#a9bccb] transition hover:bg-[#06223b]/65 hover:text-white ${index ? "border-t border-[#173f5e]" : ""}`} type="button"><span>{question}</span><ChevronRight size={13} className="shrink-0 text-[#496276] transition group-hover:translate-x-0.5 group-hover:text-[#73c6ff]" /></button>)}</div></div> : null}</article>;
 }
 
 const answerSectionTitles = new Set(["建议", "为什么", "下一步", "直接判断", "比较结果", "数据依据", "AI影响", "应强化的能力", "课程学习建议", "学习顺序", "课程外补充", "AI辅助方式", "诊断结论", "岗位需求对应", "历年方案变化", "修订建议", "证据边界"]);
@@ -540,11 +609,11 @@ function ThinkingIndicator({ progress, preview, question }: { progress: ChatProg
     return () => mm.revert();
   }, []);
   useLayoutEffect(() => { if (phraseRef.current) gsap.fromTo(phraseRef.current, { autoAlpha: 0, y: 5 }, { autoAlpha: 1, y: 0, duration: 0.32, ease: "power1.out" }); }, [index]);
-  return <div ref={rootRef} className="max-w-4xl overflow-hidden border border-[#22577f] bg-[#072541]"><div className="relative h-0.5 overflow-hidden bg-[#12375a]"><i className="thinking-scan absolute left-0 top-0 h-full w-1/4 bg-[#4b97d6]" /></div><div className="flex items-center gap-4 px-5 py-5"><span className="flex h-7 items-end gap-1">{[0, 1, 2, 3].map((item) => <i key={item} className="thinking-bar block h-6 w-1 bg-[#4b97d6]" />)}</span><div><p ref={phraseRef} className="text-sm font-medium text-[#d8e0e7]">{phrases[index] ?? phrases[0]}</p><p className="mt-1 text-xs text-[#57768f]">{progress?.message ?? "正在确定本轮问题所需的数据..."}</p></div></div>{preview && <div className="border-t border-[#174366] px-5 pb-4"><ReferencePreview preview={preview} /></div>}</div>;
+  return <div ref={rootRef} className="signal-frame max-w-4xl border-y border-[#22577f] py-1"><div className="relative h-px overflow-hidden bg-[#12375a]"><i className="thinking-scan absolute left-0 top-0 h-full w-1/4 bg-[#73c6ff]" /></div><div className="flex items-center gap-4 py-5"><span className="flex h-7 items-end gap-1">{[0, 1, 2, 3].map((item) => <i key={item} className="thinking-bar block h-6 w-1 bg-[#73c6ff]" />)}</span><div><p ref={phraseRef} className="text-sm font-medium text-[#dce8f0]">{phrases[index] ?? phrases[0]}</p><p className="mt-1 text-xs text-[#64849c]">{progress?.message ?? "正在确定本轮问题所需的数据..."}</p></div></div>{preview && <div className="border-t border-[#174366] pb-4"><ReferencePreview preview={preview} /></div>}</div>;
 }
 
 function Evidence({ evidence }: { evidence: ChatResponse["evidence"] }) {
-  return <div className="mt-5"><div className="grid gap-px border border-[#1d4d74] bg-[#1d4d74] sm:grid-cols-3"><div className="bg-[#061f39] p-3"><p className="text-[10px] tracking-[0.1em] text-[#547188]">识别技能</p><p className="mt-2 text-xs leading-5 text-[#b4c4d1]">{evidence.recognizedSkills.join("、") || "暂无"}</p></div><div className="bg-[#061f39] p-3"><p className="text-[10px] tracking-[0.1em] text-[#547188]">预测目标年</p><p className="mt-2 text-xs text-[#b4c4d1]">{evidence.forecastYear}年</p></div><div className="bg-[#061f39] p-3"><p className="text-[10px] tracking-[0.1em] text-[#547188]">直接观测组合</p><p className="mt-2 text-xs text-[#b4c4d1]">{evidence.observedPairCount}组</p></div></div><ReferencePreview preview={buildEvidencePreview(evidence)} /></div>;
+  return <div className="mt-6"><div className="grid border-y border-[#1d4d74] sm:grid-cols-[1.6fr_0.7fr_0.7fr]"><div className="py-4 pr-5 sm:border-r sm:border-[#173f5e]"><p className="text-[10px] tracking-[0.1em] text-[#547188]">识别技能</p><p className="mt-2 text-xs leading-5 text-[#b9cad6]">{evidence.recognizedSkills.join("、") || "暂无"}</p></div><div className="border-t border-[#173f5e] py-4 sm:border-r sm:border-t-0 sm:px-5"><p className="text-[10px] tracking-[0.1em] text-[#547188]">预测目标年</p><p className="mt-2 font-serif text-xl text-[#73c6ff]">{evidence.forecastYear}</p></div><div className="border-t border-[#173f5e] py-4 sm:border-t-0 sm:pl-5"><p className="text-[10px] tracking-[0.1em] text-[#547188]">直接观测组合</p><p className="mt-2 font-serif text-xl text-[#ee9870]">{evidence.observedPairCount}<span className="ml-1 text-xs text-[#7791a4]">组</span></p></div></div><ReferencePreview preview={buildEvidencePreview(evidence)} /></div>;
 }
 
 function ReferencePreview({ preview }: { preview: EvidencePreview }) {
